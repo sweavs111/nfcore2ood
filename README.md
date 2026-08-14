@@ -156,6 +156,7 @@ warning:
 - `NF2OOD_MODULE_NAME` (default `nextflow`, `""` to skip): name of the Nextflow environment module the generated job wrapper should `module load`. Set explicitly to `""` if your site installs Nextflow system-wide and there is no module to load.
 - `NF2OOD_CONTAINER_MODULE` (default `singularity`, `""` to skip): name of the container-engine environment module to `module load` at job runtime. Set explicitly to `""` for sites where Singularity / Apptainer is installed as an OS package rather than as an environment module. The runtime wrapper also auto-skips module loading entirely on compute nodes that have no `module` function at all.
 - `NF2OOD_ENV_FILE` (default empty): path that generated runtime scripts will try to source
+- `NF2OOD_SLURM_EXTRA_CONFIG` (default empty): path to an extra `-c` config file layered on top of `NF2OOD_SLURM_PROFILE` for scheduler-backed runs. For a cluster that has no registered `nf-core/configs` profile (e.g. a dev/test SLURM cluster), set `NF2OOD_SLURM_PROFILE` to a generic profile like `singularity` and point this at a local config file that sets `process.executor`/`queue`/`resourceLimits` directly instead.
 
 Downloader defaults are derived from those settings:
 

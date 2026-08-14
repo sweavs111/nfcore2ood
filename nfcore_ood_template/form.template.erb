@@ -62,6 +62,20 @@ __NEXTFLOW_VERSION_FIELD__
       - "__NF2OOD_DEFAULT_DIRECTORY__"
     help: Directory where the Nextflow launch should run.
 
+  use_test_profile:
+    label: Run pipeline's built-in test profile
+    widget: check_box
+    checked_value: 1
+    unchecked_value: 0
+    help: |
+      Launches with `-profile test` (plus the container/scheduler profile),
+      using the pipeline's official minimal test dataset instead of any
+      parameter fields below — those fields are **not** passed to Nextflow
+      when this is checked. Useful for verifying that this app launches the
+      pipeline correctly. Fields this form marks as required (e.g. Input)
+      still need a placeholder value to pass browser validation, but the
+      value itself is ignored.
+
   resume:
     label: Resume previous run
     widget: check_box

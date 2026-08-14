@@ -50,9 +50,17 @@ dist/
 # Site-specific configuration. Copy nf2ood.env.example to nf2ood.env
 # and fill in your site values; the real file should never be committed.
 nf2ood.env
+nf2ood.env.*
+!nf2ood.env.example
 
 # Local generated output trees (typical nf2ood --output targets and
 # pipeline install roots used during local development).
 ood/
 modules/
 generated-apps/
+.deploy-staging/
+
+# Local Nextflow dist-cache bind mount and nf-core-download test shim
+# (see download_nfcore_pipeline.sh) -- machine-local, never committed.
+.nf-dist-cache/
+.nf-json-shim/

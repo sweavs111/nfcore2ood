@@ -330,6 +330,7 @@ customize_generated_app() {
   local app_slug version_path subcategory
   local rendered_cluster rendered_default_directory rendered_module_name
   local rendered_pipeline_root rendered_singularity_cache rendered_slurm_profile
+  local rendered_slurm_extra_config
   local rendered_container_module rendered_partition_partial rendered_env_file
 
   app_slug="$(basename "$app_dir")"
@@ -343,6 +344,11 @@ customize_generated_app() {
 
   # Soft default; a warning is emitted once in validate_environment when unset.
   rendered_slurm_profile="${NF2OOD_SLURM_PROFILE:-default}"
+
+  # Soft default; empty means no extra -c file is layered onto the slurm
+  # profile above (the normal case at sites using a named nf-core/configs
+  # institutional profile).
+  rendered_slurm_extra_config="$(config_value NF2OOD_SLURM_EXTRA_CONFIG "")"
 
   # Soft defaults that are reasonable cross-site values.
   rendered_cluster="$(config_value NF2OOD_CLUSTER "cluster")"
@@ -382,6 +388,7 @@ customize_generated_app() {
     --set "__NF2OOD_PIPELINE_ROOT__=${rendered_pipeline_root}"
     --set "__NF2OOD_SINGULARITY_CACHEDIR__=${rendered_singularity_cache}"
     --set "__NF2OOD_SLURM_PROFILE__=${rendered_slurm_profile}"
+    --set "__NF2OOD_SLURM_EXTRA_CONFIG__=${rendered_slurm_extra_config}"
     --set "__NF2OOD_ENV_FILE__=${rendered_env_file}"
   )
 

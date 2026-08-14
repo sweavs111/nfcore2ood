@@ -28,11 +28,18 @@ if [[ -n "${nf2ood_env_file}" && -r "${nf2ood_env_file}" ]]; then
   source "${nf2ood_env_file}"
 fi
 
-module_name="${NF2OOD_MODULE_NAME:-__NF2OOD_MODULE_NAME__}"
-container_module="${NF2OOD_CONTAINER_MODULE:-__NF2OOD_CONTAINER_MODULE__}"
+module_name="${NF2OOD_MODULE_NAME-__NF2OOD_MODULE_NAME__}"
+container_module="${NF2OOD_CONTAINER_MODULE-__NF2OOD_CONTAINER_MODULE__}"
 pipeline_root="${NF2OOD_PIPELINE_ROOT:-__NF2OOD_PIPELINE_ROOT__}"
 singularity_cache="${NF2OOD_SINGULARITY_CACHEDIR:-__NF2OOD_SINGULARITY_CACHEDIR__}"
 slurm_profile="${NF2OOD_SLURM_PROFILE:-__NF2OOD_SLURM_PROFILE__}"
+# Optional extra -c config file layered on top of the slurm profile above.
+# Unset at sites that rely solely on a named nf-core/configs institutional
+# profile (e.g. production Hazel). Used for dev/test clusters that aren't
+# registered in nf-core/configs: point this at a local config file (it can
+# set process.executor/queue/resourceLimits directly, no profile needed)
+# and set NF2OOD_SLURM_PROFILE to a generic profile like "singularity".
+slurm_extra_config="${NF2OOD_SLURM_EXTRA_CONFIG:-__NF2OOD_SLURM_EXTRA_CONFIG__}"
 nextflow_version="<%= context.nextflow_version.to_s.strip %>"
 
 if [[ $(type -t module || true) == "function" ]]; then
@@ -50,6 +57,12 @@ if [[ $(type -t module || true) == "function" ]]; then
 fi
 
 export NXF_SINGULARITY_CACHEDIR="${singularity_cache}"
+# The pipeline's own 'validation.monochromeLogs' config option is
+# unrecognized by this Nextflow version (see the WARN it prints every run)
+# and does nothing -- NXF_ANSI_LOG is the mechanism that actually disables
+# Nextflow's live-redraw ANSI/cursor codes, which otherwise pile up
+# (rather than overwrite in place) once output.log isn't a real TTY.
+export NXF_ANSI_LOG=false
 pipeline_path="${pipeline_root}/__PIPELINE_NAME__/__PIPELINE_VERSION_PATH__"
 export projectDir="${pipeline_path}"
 export baseDir="${pipeline_path}"
@@ -59,10 +72,32 @@ sed -i.bak -E '/:[[:space:]]*,/d; /"[[:space:]]*"/d' nf-params.json
 sed -i.bak -E "s@\$(projectDir)@${projectDir}@g; s@\$(baseDir)@${baseDir}@g; s/\"None\"/null/g" nf-params.json
 rm -f nf-params.json.bak
 
-nextflow_command=(nextflow run "${pipeline_path}" -params-file nf-params.json)
+use_test_profile="<%= context.use_test_profile %>"
+
+# nf-core's built-in test profile deliberately never sets `outdir` (the
+# pipeline's own conf/test.config documents `--outdir <OUTDIR>` as a
+# required companion flag) -- so outdir must always be passed explicitly,
+# even when the test profile supplies every other parameter and
+# -params-file is skipped below.
+outdir_value="<%= context.outdir.to_s.strip %>"
+
+nextflow_command=(nextflow run "${pipeline_path}")
+
+# The pipeline's built-in test profile ships its own dataset/parameter
+# values via -profile config, which CLI params take precedence over. So
+# when it's selected, skip -params-file entirely rather than let the
+# form's (mostly blank) fields silently override the test dataset.
+if [[ "${use_test_profile}" != "1" ]]; then
+  nextflow_command+=("-params-file" "nf-params.json")
+fi
+
+nextflow_command+=("--outdir" "${outdir_value}")
 
 if [[ "<%= context.executor %>" == "slurm" ]]; then
-  nextflow_command+=("-profile" "${slurm_profile}")
+  profile="${slurm_profile}"
+  [[ "${use_test_profile}" == "1" ]] && profile="test,${profile}"
+  nextflow_command+=("-profile" "${profile}")
+  [[ -n "${slurm_extra_config}" ]] && nextflow_command+=("-c" "${slurm_extra_config}")
 else
   cat > custom.config <<EOF
 cleanup = true
@@ -74,7 +109,9 @@ process {
   ]
 }
 EOF
-  nextflow_command+=("-profile" "singularity" "-c" "custom.config")
+  profile="singularity"
+  [[ "${use_test_profile}" == "1" ]] && profile="test,${profile}"
+  nextflow_command+=("-profile" "${profile}" "-c" "custom.config")
 fi
 
 nextflow_command+=("${resume_flag[@]}")

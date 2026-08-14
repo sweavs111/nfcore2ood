@@ -122,12 +122,40 @@ fi
 
 pipeline_dir="${install_root}/pipelines/nf-core-${pipeline_name}"
 version_dir="${pipeline_dir}/${revision}"
-cache_dir="${install_root}/singularity-images"
+cache_dir="${NF2OOD_SINGULARITY_CACHEDIR:-${install_root}/singularity-images}"
 
 export NXF_SINGULARITY_CACHEDIR="${cache_dir}"
 
 mkdir -p "${pipeline_dir}"
 cd "${pipeline_dir}"
+
+# Nextflow 26.04.x has two regressions that break `nf-core pipelines
+# download`'s introspection steps:
+#   1. `nextflow inspect -format json` also writes "[PIPELINE] ...",
+#      "[WORKDIR] ...", "[SUCCESS] ..." status lines to stdout, which
+#      corrupts the JSON nf-core/tools expects there.
+#   2. `nextflow config -o json` crashes (MissingPropertyException) on any
+#      process directive closure whose variable isn't literally named
+#      `meta` (e.g. mag's `assembly_meta`), even though that name resolves
+#      fine at real pipeline runtime.
+# Both are fixed by using an older Nextflow (25.10.0 confirmed clean) for
+# just this download step. When nf-core runs inside a container, its
+# bundled `nextflow` launcher hardcodes its self-install directory to a
+# path that's read-only at container runtime, so NXF_VER alone can't
+# switch versions there - bind a writable directory over it so the
+# launcher can self-install the pinned version. The two APPTAINER* vars
+# are Apptainer/Singularity-specific and are silently ignored for
+# non-containerized nf-core installs (e.g. a native venv install), so the
+# plain NXF_VER export below covers that case instead - it's what the
+# host `nextflow` launcher itself reads to pick which version to
+# self-install. Setting all three together is harmless either way. The
+# actual pipeline run later is unaffected; it uses whatever Nextflow the
+# user has loaded then.
+nxf_dist_cache_dir="${SCRIPT_DIR}/.nf-dist-cache"
+mkdir -p "${nxf_dist_cache_dir}"
+export APPTAINER_BINDPATH="${nxf_dist_cache_dir}:/usr/local/share/nextflow/dist"
+export APPTAINERENV_NXF_VER="${NFCORE_DOWNLOAD_NXF_VER:-25.10.0}"
+export NXF_VER="${NFCORE_DOWNLOAD_NXF_VER:-25.10.0}"
 
 echo "Downloading nf-core/${pipeline_name} ${revision} to ${version_dir}"
 

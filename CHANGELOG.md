@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- Generated apps now include a "Run pipeline's built-in test profile"
+  checkbox. When checked, the launch script runs
+  `nextflow run <pipeline> -profile test,<container/scheduler-profile>` and
+  skips `-params-file` entirely, instead of passing along the (mostly blank)
+  form fields — CLI params take precedence over `-profile test`'s config
+  values, so leaving `-params-file` in would otherwise silently override the
+  test dataset. Lets a form-required field like Input keep any placeholder
+  value; it's ignored in this mode. Useful for smoke-testing that a
+  generated app launches its pipeline correctly, without hand-copying every
+  `conf/test.config` value into the form.
 
 ## [1.4.0] - 2026-06-25
 

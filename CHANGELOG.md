@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `generate_landing_page.py`: builds `apps/sys/nf-core/public/index.html`,
+  a static gallery page grouping deployed pipeline apps by subcategory and
+  linking to each one's `apps/show/<slug>` launch page. Individual pipeline
+  manifests ship `category: ""` deliberately (`OodApp#should_appear_in_nav?`
+  requires a non-empty category) so they stay off the dashboard's main
+  nav/grid and are only reached through this page. `deploy_pipelines_prod.sh`
+  now regenerates it after every deploy.
+
+### Fixed
+
+- `deploy_pipelines_prod.sh` deployed generated pipeline apps to
+  `apps/sys/nf-core/<pipeline>` instead of `apps/sys/<pipeline>`. OOD's
+  `SysRouter` only lists *direct* children of `apps/sys` as apps (no
+  recursion), so every pipeline app deployed this way was invisible on the
+  dashboard. `PRODUCTION_DIR` is now `apps/sys` itself, matching the flat
+  layout `deploy_pipelines_dev.sh` already used; the sync also moved to one
+  `rsync --delete` per app directory instead of one at the shared `apps/sys`
+  root, so a deploy can no longer wipe out unrelated sys apps.
+
 - Generated apps now include a "Run pipeline's built-in test profile"
   checkbox. When checked, the launch script runs
   `nextflow run <pipeline> -profile test,<container/scheduler-profile>` and

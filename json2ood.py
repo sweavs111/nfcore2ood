@@ -299,17 +299,37 @@ def rendered_field_names(field_spec: FieldSpec) -> list[str]:
 
 
 def render_group(group: GroupSpec) -> list[str]:
+    """Render a schema definition group as a check_box toggle.
+
+    OOD's dynamic-forms JS reads a checkbox's "data-hide-<field>-when-un-checked"
+    attributes via jQuery's .data(), which camelCases the attribute name on
+    hyphens only (not underscores) before matching it back to a field id. So
+    the attribute name here must be hyphenated -- an underscored field name
+    would silently fail to match the field it's supposed to hide.
+
+    A group containing any required field starts checked (fields shown) --
+    `checked: true` is a plain Rails check_box option that forces the initial
+    state regardless of any model default, so this doesn't need a matching
+    `value`/`checked_value` dance. Otherwise a required field could be hidden
+    on page load with no visual cue that it needs filling in.
+    """
+
     lines = [
         f"  {group.normalized_name}:",
         f"    label: {yaml_single_quote(group.label)}",
         "    widget: 'check_box'",
-        "    html_options:",
-        "      data:",
     ]
+
+    if any(field_spec.required for field_spec in group.fields):
+        lines.append("    checked: true")
+
+    lines.append("    html_options:")
+    lines.append("      data:")
 
     for field_spec in group.fields:
         for field_name in rendered_field_names(field_spec):
-            lines.append(f"        hide-{field_name}-when-un-checked: true")
+            hyphenated_name = field_name.replace("_", "-")
+            lines.append(f"        hide-{hyphenated_name}-when-un-checked: true")
 
     if group.help_text:
         lines.append(f"    help: {yaml_single_quote(group.help_text)}")

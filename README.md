@@ -328,6 +328,60 @@ apps still assume:
 Those are the main areas to review before sharing the generated apps with other
 centers or preparing an Appverse submission.
 
+## NC State BRC fork (`brcdev` branch)
+
+This fork ([`sweavs111/nfcore2ood`](https://github.com/sweavs111/nfcore2ood)) tracks
+[`TuftsRT/nfcore2ood`](https://github.com/TuftsRT/nfcore2ood) `main` and layers NC State
+Bioinformatics Research Center (BRC)-specific changes on top, on the `brcdev` branch. It's
+deployed on the BRC Dev cluster's Open OnDemand node; see the
+[BRC admin handbook](https://hurwitzlab.github.io/BRC_admin_handbook/11_nf-core_OOD.html)
+for the full site-specific setup and workflow.
+
+Changes on `brcdev` not in upstream `main`:
+
+**Site customizations:**
+
+- A "Run pipeline's built-in test profile" checkbox (`use_test_profile`) on every generated
+  form. When checked, the launch script runs `-profile test,<engine>` and skips
+  `-params-file` entirely, so a generated app can be smoke-tested without hand-filling every
+  required field.
+- `NF2OOD_SLURM_EXTRA_CONFIG` — an extra `-c` config file layered on top of
+  `NF2OOD_SLURM_PROFILE`, for sites/clusters with no registered `nf-core/configs`
+  institutional profile.
+- `NF2OOD_SINGULARITY_CACHEDIR` is now also honored by `download_nfcore_pipeline.sh` for the
+  download step's cache dir, not just by `nf2ood` itself.
+- `download_nfcore_pipeline.sh` pins Nextflow to `25.10.0` (via a bind-mounted dist-cache
+  directory) for the download step only, working around two `nf-core pipelines download`
+  regressions in Nextflow 26.04.x: corrupted JSON output from `nextflow inspect`, and a crash
+  in `nextflow config -o json` on process closures whose variable isn't literally named `meta`.
+- `NXF_ANSI_LOG=false` in the generated launch script, so Nextflow's live-redraw ANSI codes
+  don't pile up in `output.log` once it's no longer a real TTY.
+- A visible `*` indicator on required form fields — `bootstrap_form` marks required labels
+  with a CSS class but ships no styling for it, so without this the only cue was the
+  browser's native validation popup on submit.
+
+**Bug fixes:**
+
+- `generate_landing_page.py` (new): builds a static gallery page (`apps/sys/nf-core/public/index.html`)
+  grouping deployed pipeline apps by subcategory, since individual pipeline manifests ship
+  `category: ""` deliberately to stay off the dashboard's main nav/grid.
+  `deploy_pipelines_prod.sh` regenerates it after every deploy.
+- Fixed `deploy_pipelines_prod.sh` to deploy pipeline apps flat under `apps/sys` instead of
+  nested under `apps/sys/nf-core` — OOD's `SysRouter` only lists direct children of
+  `apps/sys` (no recursion), so the nested layout made every generated app invisible.
+- Fixed `json2ood.py`'s generated `hide-<field>-when-un-checked` data attributes to hyphenate
+  rather than underscore the field name — jQuery's `.data()` only camelCases hyphens, so an
+  underscored attribute silently failed to match its field. Groups containing a required
+  field now also default to `checked: true`, so a required field can't be hidden on page
+  load with no visual cue that it needs a value.
+- `nf2ood` now detects pipelines whose `nextflow.config` (or an `includeConfig`'d file, one
+  level deep) defines a legacy top-level Groovy function like `check_max()` — a pre-2023
+  nf-core template pattern that Nextflow's newer declarative-only config parser (v2, default
+  since ~24.10) rejects outright. When detected, the generated launch script forces
+  `NXF_SYNTAX_PARSER=v1` at runtime.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full, dated changelog.
+
 ## Contributor
 
 <img src="https://github.com/zhan4429.png" alt="Yucheng Zhang" width="120">

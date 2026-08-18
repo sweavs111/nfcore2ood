@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pipelines whose `nextflow.config` (or an `includeConfig`'d file, one level
+  deep) defines a legacy top-level Groovy function such as `check_max()` —
+  the pre-2023 nf-core template's way of clamping resource requests to
+  `params.max_memory`/`max_time`/`max_cpus` — now generate correctly.
+  Nextflow's newer config parser (v2, default since ~24.10) is
+  declarative-only and rejects that pattern before the pipeline even starts
+  (`ConfigParseException: Unexpected input: '(' ...`). `nf2ood` now detects
+  this at generation time and bakes `NXF_SYNTAX_PARSER=v1` into the
+  generated launch script when needed, regardless of which Nextflow module
+  version gets loaded at runtime.
+
 - `deploy_pipelines_prod.sh` deployed generated pipeline apps to
   `apps/sys/nf-core/<pipeline>` instead of `apps/sys/<pipeline>`. OOD's
   `SysRouter` only lists *direct* children of `apps/sys` as apps (no

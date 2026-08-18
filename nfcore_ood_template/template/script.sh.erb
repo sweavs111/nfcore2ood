@@ -57,6 +57,20 @@ if [[ $(type -t module || true) == "function" ]]; then
 fi
 
 export NXF_SINGULARITY_CACHEDIR="${singularity_cache}"
+# This pipeline version's nextflow.config (or an included conf/*.config)
+# defines a legacy top-level Groovy function -- almost always check_max(),
+# the pre-2023 nf-core template's way of clamping resource requests to
+# params.max_memory/max_time/max_cpus. Nextflow's newer config parser (v2,
+# the default since ~24.10) is declarative-only and rejects it before the
+# pipeline even starts:
+#   ConfigParseException: Unexpected input: '(' @ line N, column N.
+#      def check_max(obj, type) {
+# Detected once at app-generation time (see config_needs_legacy_parser in
+# nf2ood); baked in here so it applies regardless of which Nextflow module
+# version gets loaded above.
+if [[ "__NF2OOD_FORCE_LEGACY_PARSER__" == "true" ]]; then
+  export NXF_SYNTAX_PARSER=v1
+fi
 # The pipeline's own 'validation.monochromeLogs' config option is
 # unrecognized by this Nextflow version (see the WARN it prints every run)
 # and does nothing -- NXF_ANSI_LOG is the mechanism that actually disables

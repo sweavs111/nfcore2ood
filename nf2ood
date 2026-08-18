@@ -198,6 +198,40 @@ locate_schema() {
   return 1
 }
 
+config_needs_legacy_parser() {
+  # Detect a legacy top-level Groovy function/closure definition (e.g.
+  # `def check_max(obj, type) { ... }`) in a pipeline's nextflow.config or
+  # any config it includeConfig's (one level deep -- covers the common
+  # nf-core layout of conf/base.config defining check_max()).
+  #
+  # nf-core pipeline templates up through mid-2023 defined check_max() this
+  # way to clamp resource requests to params.max_memory/max_time/max_cpus.
+  # Nextflow's newer config parser (v2, default since ~24.10) is
+  # declarative-only and rejects it outright, before any pipeline code
+  # runs:
+  #   ConfigParseException: Unexpected input: '(' @ line N, column N.
+  #      def check_max(obj, type) {
+  #                   ^
+  # Nextflow still ships the old parser; NXF_SYNTAX_PARSER=v1 selects it.
+  local schema_path=$1
+  local pipeline_dir
+  pipeline_dir="$(dirname "$schema_path")"
+  local main_config="${pipeline_dir}/nextflow.config"
+  [[ -f "$main_config" ]] || return 1
+
+  local -a configs=("$main_config")
+  local included resolved
+  while IFS= read -r included; do
+    [[ -n "$included" ]] || continue
+    resolved="${pipeline_dir}/${included}"
+    [[ -f "$resolved" ]] && configs+=("$resolved")
+  done < <(grep -ohE "includeConfig +['\"][^'\"]+['\"]" "$main_config" 2>/dev/null \
+             | sed -E "s/includeConfig +['\"]([^'\"]+)['\"]/\1/")
+
+  grep -lE '^[[:space:]]*def[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(' \
+    "${configs[@]}" >/dev/null 2>&1
+}
+
 lookup_tsv_value() {
   # Look up a key in a 2-column TSV. Comments (#) and blank lines are skipped,
   # as is a header row matching "pipeline" or "pipeline_name". Key match is
@@ -325,6 +359,7 @@ customize_generated_app() {
   local app_dir=$1
   local pipeline_name=$2
   local pipeline_version=$3
+  local schema_path=$4
 
   local pipeline_slug="${pipeline_name#nf-core-}"
   local app_slug version_path subcategory
@@ -367,6 +402,12 @@ customize_generated_app() {
   local rendered_nextflow_version_field
   rendered_nextflow_version_field="$(render_nextflow_version_field "$rendered_module_name")"
 
+  local rendered_force_legacy_parser="false"
+  if config_needs_legacy_parser "$schema_path"; then
+    rendered_force_legacy_parser="true"
+    log "  NOTE: ${pipeline_name} ${pipeline_version} defines a legacy config function (e.g. check_max()); forcing NXF_SYNTAX_PARSER=v1 at runtime."
+  fi
+
   # Build the --set TOKEN=VALUE arglist once and apply all substitutions in a
   # single Python pass over the small set of files in the app dir.
   local -a customize_args=(
@@ -384,6 +425,7 @@ customize_generated_app() {
     --set "__NF2OOD_PARTITION_YML__=${rendered_partition_partial}"
     --set "__NF2OOD_MODULE_NAME__=${rendered_module_name}"
     --set "__NEXTFLOW_VERSION_FIELD__=${rendered_nextflow_version_field}"
+    --set "__NF2OOD_FORCE_LEGACY_PARSER__=${rendered_force_legacy_parser}"
     --set "__NF2OOD_CONTAINER_MODULE__=${rendered_container_module}"
     --set "__NF2OOD_PIPELINE_ROOT__=${rendered_pipeline_root}"
     --set "__NF2OOD_SINGULARITY_CACHEDIR__=${rendered_singularity_cache}"
@@ -450,7 +492,7 @@ generate_app() {
 
   rm -f "$base_form" "$base_params"
 
-  if ! customize_generated_app "$app_dir" "$pipeline_name" "$pipeline_version"; then
+  if ! customize_generated_app "$app_dir" "$pipeline_name" "$pipeline_version" "$schema_path"; then
     log "WARNING: customize step failed for ${pipeline_name} ${pipeline_version}; skipping."
     rm -rf "$app_dir"
     return 1

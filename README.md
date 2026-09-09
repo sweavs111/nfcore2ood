@@ -164,6 +164,15 @@ Downloader defaults are derived from those settings:
 - configs dir defaults to `<install-root>/configs`
 - container engine defaults to `NF2OOD_CONTAINER_MODULE`
 
+`download_nfcore_pipeline.sh` also reads a few downloader-only variables
+(see comments in [`nf2ood.env.example`](./nf2ood.env.example)):
+`NFCORE_ENGINE_MODULE`, `NFCORE_MODULE_NAME`, and `NFCORE_NXF_SYNTAX_PARSER`
+(default `v1` — pins the legacy Nextflow config parser for the `nextflow
+inspect` calls the downloader makes while resolving container images, since
+recent Nextflow releases' stricter default parser rejects config syntax
+still shipped by many older nf-core pipeline revisions; set to `""` to use
+Nextflow's own default parser instead).
+
 ## Institutional profile (Tufts example)
 
 [`nf2ood.env.example`](./nf2ood.env.example) is shipped with Tufts values

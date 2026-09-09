@@ -124,7 +124,40 @@ pipeline_dir="${install_root}/pipelines/nf-core-${pipeline_name}"
 version_dir="${pipeline_dir}/${revision}"
 cache_dir="${install_root}/singularity-images"
 
-export NXF_SINGULARITY_CACHEDIR="${cache_dir}"
+#export NXF_SINGULARITY_CACHEDIR="${cache_dir}"
+export NXF_SINGULARITY_CACHEDIR="$NF2OOD_SINGULARITY_CACHEDIR"
+
+# Sites that run `nf-core` via a Singularity/Apptainer wrapper (e.g. an
+# environment-modules container wrapper) only auto-bind the current working
+# directory into the container - everything else is read-only. That leaves
+# NF2OOD_SINGULARITY_CACHEDIR unwritable (and even invisible) inside the
+# container whenever it isn't a descendant of pipeline_dir, which is where
+# we `cd` to below. Explicitly bind both trees so nf-core can write to
+# either, without clobbering any bind path the site/user already set.
+bind_paths="${install_root}"
+if [[ -n "${NF2OOD_SINGULARITY_CACHEDIR:-}" ]]; then
+  bind_paths="${bind_paths},${NF2OOD_SINGULARITY_CACHEDIR}"
+fi
+export APPTAINER_BINDPATH="${bind_paths}${APPTAINER_BINDPATH:+,${APPTAINER_BINDPATH}}"
+export SINGULARITY_BINDPATH="${APPTAINER_BINDPATH}"
+
+# `nf-core pipelines download` shells out to `nextflow inspect` to enumerate
+# each pipeline's container images, which fully parses nextflow.config.
+# Recent Nextflow releases default to the newer, stricter (v2) config/DSL
+# parser, which rejects legacy Groovy constructs still shipped in many older
+# nf-core pipeline revisions (e.g. `def check_max(obj, type) { ... }`) and is
+# also more eager about validating *every* `includeConfig` in the file,
+# including ones behind profiles that were never selected - some pipeline
+# revisions ship a profile whose includeConfig path doesn't actually exist
+# (e.g. nf-core/viralrecon 3.0.0's `test_full_sispa` profile), which only
+# the stricter parser trips over. NFCORE_NXF_SYNTAX_PARSER lets a site pin
+# the legacy parser for this download step without affecting the Nextflow
+# version/parser used when pipelines actually run. Set explicitly to "" to
+# leave Nextflow's own default in effect.
+nxf_syntax_parser="${NFCORE_NXF_SYNTAX_PARSER-v1}"
+if [[ -n "${nxf_syntax_parser}" ]]; then
+  export NXF_SYNTAX_PARSER="${nxf_syntax_parser}"
+fi
 
 mkdir -p "${pipeline_dir}"
 cd "${pipeline_dir}"

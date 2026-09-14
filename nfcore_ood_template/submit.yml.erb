@@ -14,6 +14,18 @@ script:
     - "<%= bc_num_hours %>:00:00"
     - "--nodes"
     - "1"
+    <%- if use_test_profile.to_s == "1" -%>
+    # The built-in test profile (-profile test) fetches its samplesheet and
+    # reference files -- and sometimes other assets hardcoded directly in a
+    # pipeline's own workflow code, not just conf/test.config -- from
+    # raw.githubusercontent.com at runtime. Route this launch job to xfer,
+    # the one partition with outbound internet, so all of that resolves
+    # normally instead of hanging on a no-internet compute node.
+    - "-p"
+    - "xfer"
+    - "--qos"
+    - "xfer"
+    <%- end -%>
     <%- if executor == "slurm" -%>
     - "-n"
     - "2"
@@ -24,7 +36,7 @@ script:
     - "<%= num_cores %>"
     - "--mem"
     - "<%= num_memory %>G"
-    <%- if partition.to_s.strip != "" -%>
+    <%- if use_test_profile.to_s != "1" && partition.to_s.strip != "" -%>
     - "-p"
     - "<%= partition %>"
     <%- end -%>

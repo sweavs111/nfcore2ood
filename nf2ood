@@ -198,6 +198,40 @@ locate_schema() {
   return 1
 }
 
+config_needs_legacy_parser() {
+  # Detect a legacy top-level Groovy function/closure definition (e.g.
+  # `def check_max(obj, type) { ... }`) in a pipeline's nextflow.config or
+  # any config it includeConfig's (one level deep -- covers the common
+  # nf-core layout of conf/base.config defining check_max()).
+  #
+  # nf-core pipeline templates up through mid-2023 defined check_max() this
+  # way to clamp resource requests to params.max_memory/max_time/max_cpus.
+  # Nextflow's newer config parser (v2, default since ~24.10) is
+  # declarative-only and rejects it outright, before any pipeline code
+  # runs:
+  #   ConfigParseException: Unexpected input: '(' @ line N, column N.
+  #      def check_max(obj, type) {
+  #                   ^
+  # Nextflow still ships the old parser; NXF_SYNTAX_PARSER=v1 selects it.
+  local schema_path=$1
+  local pipeline_dir
+  pipeline_dir="$(dirname "$schema_path")"
+  local main_config="${pipeline_dir}/nextflow.config"
+  [[ -f "$main_config" ]] || return 1
+
+  local -a configs=("$main_config")
+  local included resolved
+  while IFS= read -r included; do
+    [[ -n "$included" ]] || continue
+    resolved="${pipeline_dir}/${included}"
+    [[ -f "$resolved" ]] && configs+=("$resolved")
+  done < <(grep -ohE "includeConfig +['\"][^'\"]+['\"]" "$main_config" 2>/dev/null \
+             | sed -E "s/includeConfig +['\"]([^'\"]+)['\"]/\1/")
+
+  grep -lE '^[[:space:]]*def[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(' \
+    "${configs[@]}" >/dev/null 2>&1
+}
+
 lookup_tsv_value() {
   # Look up a key in a 2-column TSV. Comments (#) and blank lines are skipped,
   # as is a header row matching "pipeline" or "pipeline_name". Key match is
@@ -321,16 +355,48 @@ determine_subcategory() {
   esac
 }
 
+stage_local_testconfig() {
+  # Best-effort: writes app_dir/template/local_test.config when a local
+  # nf-core/test-datasets clone is staged for this pipeline (see
+  # download_nfcore_pipeline.sh --with-testdata), so the generated
+  # script.sh.erb can run the "test profile" checkbox with `-c
+  # local_test.config` instead of the network-dependent `-profile test`.
+  # Never fails app generation on its own -- a missing local_test.config
+  # just means script.sh.erb falls back to `-profile test` as before.
+  local app_dir=$1
+  local pipeline_name=$2
+  local pipeline_dir=$3
+
+  local pipeline_slug="${pipeline_name#nf-core-}"
+  local testdata_root="${NF2OOD_TESTDATA_ROOT:-$(dirname "$NF2OOD_PIPELINE_ROOT")/testdata}"
+  local testdata_dir="${testdata_root}/${pipeline_slug}"
+
+  if [[ ! -d "$testdata_dir" ]]; then
+    return 0
+  fi
+
+  if python3 "$REPO_ROOT/gen_local_testconfig.py" \
+       "$pipeline_dir" "$testdata_dir" "${app_dir}/template/local_test.config"; then
+    if [[ -f "${app_dir}/template/local_test.config" ]]; then
+      log "  Local test data found at ${testdata_dir}; generated local_test.config"
+    fi
+  else
+    log "WARNING: gen_local_testconfig.py failed for ${pipeline_name} (non-fatal; test profile will use -profile test)"
+  fi
+}
+
 customize_generated_app() {
   local app_dir=$1
   local pipeline_name=$2
   local pipeline_version=$3
+  local schema_path=$4
 
   local pipeline_slug="${pipeline_name#nf-core-}"
   local app_slug version_path subcategory
   local rendered_cluster rendered_default_directory rendered_module_name
   local rendered_pipeline_root rendered_singularity_cache rendered_slurm_profile
   local rendered_container_module rendered_partition_partial rendered_env_file
+  local rendered_custom_config_base
 
   app_slug="$(basename "$app_dir")"
   version_path="${pipeline_version}/${pipeline_version//./_}"
@@ -349,6 +415,13 @@ customize_generated_app() {
   rendered_default_directory="$(config_value NF2OOD_DEFAULT_DIRECTORY "$HOME")"
   rendered_env_file="$(config_value NF2OOD_ENV_FILE "")"
 
+  # Every nf-core pipeline's nextflow.config defaults custom_config_base to
+  # raw.githubusercontent.com/nf-core/configs -- fine on sites with outbound
+  # internet from compute nodes, but it hangs the whole run on sites (like
+  # ours) that don't. Sites without a local nf-core/configs mirror just get
+  # nf-core's own default back, unchanged.
+  rendered_custom_config_base="$(config_value NF2OOD_CUSTOM_CONFIG_BASE "https://raw.githubusercontent.com/nf-core/configs/master")"
+
   # Module names use ${var-default} (no colon) so that an explicit empty
   # value in nf2ood.env means "do not load a module for this slot". Sites
   # that install nextflow / singularity / apptainer system-wide (no module
@@ -360,6 +433,12 @@ customize_generated_app() {
   rendered_container_module="${NF2OOD_CONTAINER_MODULE-singularity}"
   local rendered_nextflow_version_field
   rendered_nextflow_version_field="$(render_nextflow_version_field "$rendered_module_name")"
+
+  local rendered_force_legacy_parser="false"
+  if config_needs_legacy_parser "$schema_path"; then
+    rendered_force_legacy_parser="true"
+    log "  NOTE: ${pipeline_name} ${pipeline_version} defines a legacy config function (e.g. check_max()); forcing NXF_SYNTAX_PARSER=v1 at runtime."
+  fi
 
   # Build the --set TOKEN=VALUE arglist once and apply all substitutions in a
   # single Python pass over the small set of files in the app dir.
@@ -378,11 +457,13 @@ customize_generated_app() {
     --set "__NF2OOD_PARTITION_YML__=${rendered_partition_partial}"
     --set "__NF2OOD_MODULE_NAME__=${rendered_module_name}"
     --set "__NEXTFLOW_VERSION_FIELD__=${rendered_nextflow_version_field}"
+    --set "__NF2OOD_FORCE_LEGACY_PARSER__=${rendered_force_legacy_parser}"
     --set "__NF2OOD_CONTAINER_MODULE__=${rendered_container_module}"
     --set "__NF2OOD_PIPELINE_ROOT__=${rendered_pipeline_root}"
     --set "__NF2OOD_SINGULARITY_CACHEDIR__=${rendered_singularity_cache}"
     --set "__NF2OOD_SLURM_PROFILE__=${rendered_slurm_profile}"
     --set "__NF2OOD_ENV_FILE__=${rendered_env_file}"
+    --set "__NF2OOD_CUSTOM_CONFIG_BASE__=${rendered_custom_config_base}"
   )
 
   python3 "$REPO_ROOT/customize_app.py" "$app_dir" "${customize_args[@]}"
@@ -443,7 +524,9 @@ generate_app() {
 
   rm -f "$base_form" "$base_params"
 
-  if ! customize_generated_app "$app_dir" "$pipeline_name" "$pipeline_version"; then
+  stage_local_testconfig "$app_dir" "$pipeline_name" "$(dirname "$schema_path")"
+
+  if ! customize_generated_app "$app_dir" "$pipeline_name" "$pipeline_version" "$schema_path"; then
     log "WARNING: customize step failed for ${pipeline_name} ${pipeline_version}; skipping."
     rm -rf "$app_dir"
     return 1

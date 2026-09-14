@@ -113,6 +113,45 @@ The downloader does not require a container engine module. If `apptainer` or
 Use `--engine-module <name>` only at sites where the engine must be loaded as
 a module first.
 
+### Local test data (offline test profile)
+
+Every generated app has a "Run pipeline's built-in test profile" checkbox
+that launches with `-profile test`. nf-core's built-in test profile fetches
+its dataset from `raw.githubusercontent.com/nf-core/test-datasets`, which
+fails on sites (like Hazel) where compute nodes have no outbound internet.
+The generated app's launch script handles this by routing that launch job
+to the `xfer` partition (the one partition with outbound internet) whenever
+the checkbox is checked, rather than trying to mirror test data locally --
+some pipelines hardcode additional test assets directly in their own
+workflow code, outside `conf/test.config` or the samplesheet entirely, so no
+amount of local URL-rewriting can guarantee catching everything a given
+pipeline version needs.
+
+Pass `--with-testdata` to also clone that pipeline's nf-core/test-datasets
+branch locally:
+
+```bash
+./download_nfcore_pipeline.sh --name rnaseq --revision 3.26.0 --with-testdata
+```
+
+This clones into `<install-root>/testdata/<pipeline>` (override the root
+with `NF2OOD_TESTDATA_ROOT`, or the branch with `--testdata-branch` when it
+doesn't match the pipeline slug — see
+[`pipeline2testbranch.tsv`](./pipeline2testbranch.tsv)). It also fetches any
+URLs listed in `testdata-extra/<pipeline>.tsv`, for the rare param pinned to
+a commit outside that pipeline's own test-datasets branch (nf-core/rnaseq's
+`kraken_db` is the known example). The next `nf2ood` run then rewrites that
+pipeline's `conf/test.config` into a local, network-free `local_test.config`
+bundled into the generated app (via `gen_local_testconfig.py`).
+
+**Note:** the generated launch script does not currently read
+`local_test.config` -- the test-profile checkbox always uses the `xfer` +
+real `-profile test` path described above, regardless of whether
+`--with-testdata` was used. `local_test.config` is still generated (kept
+around for a possible future per-pipeline opt-in, e.g. for pipelines with no
+hardcoded-in-code test assets), but has no effect on the checkbox's current
+runtime behavior.
+
 Important:
 
 The downloader requires `NF2OOD_PIPELINE_ROOT` (or `--install-root`) to be
@@ -156,6 +195,8 @@ warning:
 - `NF2OOD_MODULE_NAME` (default `nextflow`, `""` to skip): name of the Nextflow environment module the generated job wrapper should `module load`. Set explicitly to `""` if your site installs Nextflow system-wide and there is no module to load.
 - `NF2OOD_CONTAINER_MODULE` (default `singularity`, `""` to skip): name of the container-engine environment module to `module load` at job runtime. Set explicitly to `""` for sites where Singularity / Apptainer is installed as an OS package rather than as an environment module. The runtime wrapper also auto-skips module loading entirely on compute nodes that have no `module` function at all.
 - `NF2OOD_ENV_FILE` (default empty): path that generated runtime scripts will try to source
+- `NF2OOD_TESTDATA_ROOT` (default `<install-root>/testdata`): where `--with-testdata` stages local nf-core/test-datasets clones, and where `nf2ood` looks for them per pipeline. Only matters for pipelines downloaded with `--with-testdata`; see [Local test data](#local-test-data-offline-test-profile).
+- `NF2OOD_TESTDATA_REPO_URL` (default the public `nf-core/test-datasets` HTTPS remote): clone URL used by `--with-testdata`.
 
 Downloader defaults are derived from those settings:
 

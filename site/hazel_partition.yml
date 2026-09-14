@@ -1,0 +1,7 @@
+# site/hazel_partition.yml
+partition:
+  widget: select
+  label: "Partition"
+  help: "Slurm partition for the local-executor launcher job."
+  options:
+    - ["compute", "compute"]

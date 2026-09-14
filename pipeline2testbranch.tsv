@@ -1,0 +1,13 @@
+# Maps an nf-core pipeline name to the branch of nf-core/test-datasets that
+# holds its test profile's data, for `download_nfcore_pipeline.sh --with-testdata`.
+# Format: <pipeline_name>\t<test-datasets_branch>
+#
+# NOTE: unlike pipeline2subcategory.tsv, keys here are the BARE pipeline
+# slug without the "nf-core-" prefix (e.g. "rnaseq") -- that's what
+# download_nfcore_pipeline.sh's --name takes and already holds as
+# pipeline_name, so no prefix-stripping is needed for this lookup.
+#
+# Only list a pipeline here if its test-datasets branch name differs from
+# the pipeline slug; lookup_testdata_branch() falls back to the slug itself
+# (e.g. rnaseq -> rnaseq branch) when there's no entry here.
+#pipeline	branch

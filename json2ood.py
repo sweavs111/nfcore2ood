@@ -40,6 +40,7 @@ STATIC_FORM_FIELDS = [
     "num_cores",
     "num_memory",
     "workdir",
+    "use_test_profile",
 ]
 TRAILING_FORM_FIELDS = ["resume", "bc_email_on_started"]
 

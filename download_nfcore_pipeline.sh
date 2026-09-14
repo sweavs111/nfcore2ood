@@ -17,6 +17,9 @@ configs_dir=""
 container_engine="${NF2OOD_CONTAINER_MODULE:-singularity}"
 engine_module="${NFCORE_ENGINE_MODULE:-}"
 nfcore_module="${NFCORE_MODULE_NAME:-nf-core}"
+with_testdata="false"
+testdata_branch=""
+testdata_repo_url="${NF2OOD_TESTDATA_REPO_URL:-https://github.com/nf-core/test-datasets.git}"
 
 usage() {
   cat <<EOF
@@ -31,6 +34,14 @@ Options:
       --container-engine NAME Container engine for nf-core download
       --engine-module NAME    Module name for the container engine
       --nfcore-module NAME    Module name for nf-core
+      --with-testdata         Also clone nf-core/test-datasets so the
+                               generated app's "Run pipeline's built-in test
+                               profile" checkbox can run offline (compute
+                               nodes typically have no outbound internet).
+                               See gen_local_testconfig.py.
+      --testdata-branch NAME  test-datasets branch to clone (default: looked
+                               up in pipeline2testbranch.tsv, falling back to
+                               PIPELINE). Only meaningful with --with-testdata.
   -h, --help                  Show this help
 EOF
 }
@@ -64,6 +75,14 @@ while (($# > 0)); do
       ;;
     --nfcore-module)
       nfcore_module="$2"
+      shift 2
+      ;;
+    --with-testdata)
+      with_testdata="true"
+      shift
+      ;;
+    --testdata-branch)
+      testdata_branch="$2"
       shift 2
       ;;
     -h|--help)
@@ -159,6 +178,84 @@ if [[ -n "${nxf_syntax_parser}" ]]; then
   export NXF_SYNTAX_PARSER="${nxf_syntax_parser}"
 fi
 
+# ---------------------------------------------------------------------------
+# --with-testdata: stage a local clone of nf-core/test-datasets so the
+# generated app's built-in test profile can run without outbound internet.
+# Kept as plain functions (rather than a separate script) since it shares
+# SCRIPT_DIR/pipeline_name/install_root with the rest of this file and has
+# no reason to run on its own.
+# ---------------------------------------------------------------------------
+lookup_testdata_branch() {
+  # pipeline2testbranch.tsv maps a pipeline name to its nf-core/test-datasets
+  # branch when the two names differ. Falls back to the pipeline name itself,
+  # which is correct for most pipelines (e.g. rnaseq -> rnaseq branch).
+  local pipeline_name=$1
+  local tsv="${SCRIPT_DIR}/pipeline2testbranch.tsv"
+  local key value
+  if [[ -f "${tsv}" ]]; then
+    while IFS=$'\t' read -r key value _; do
+      key=${key//$'\r'/}
+      [[ -z "${key//[[:space:]]/}" || "${key:0:1}" == "#" ]] && continue
+      if [[ "${key,,}" == "${pipeline_name,,}" ]]; then
+        printf '%s\n' "${value//$'\r'/}"
+        return 0
+      fi
+    done < "${tsv}"
+  fi
+  printf '%s\n' "${pipeline_name}"
+}
+
+stage_testdata() {
+  local pipeline_name=$1
+  local install_root=$2
+  local branch=$3
+  local repo_url=$4
+
+  if [[ -z "${branch}" ]]; then
+    branch="$(lookup_testdata_branch "${pipeline_name}")"
+  fi
+
+  local testdata_root="${NF2OOD_TESTDATA_ROOT:-${install_root}/testdata}"
+  local testdata_dir="${testdata_root}/${pipeline_name}"
+
+  echo "Staging local test data: nf-core/test-datasets@${branch} -> ${testdata_dir}"
+  mkdir -p "${testdata_root}"
+
+  if [[ -d "${testdata_dir}/.git" ]]; then
+    git -C "${testdata_dir}" fetch origin "${branch}"
+    git -C "${testdata_dir}" checkout -q "${branch}"
+    git -C "${testdata_dir}" reset --hard "origin/${branch}"
+  else
+    rm -rf "${testdata_dir}"
+    git clone --single-branch --branch "${branch}" "${repo_url}" "${testdata_dir}"
+  fi
+
+  # A pipeline's conf/test.config can pin a param to a commit that isn't
+  # part of its own test-datasets branch at all (nf-core/rnaseq's kraken_db
+  # is the known example -- it lives on a different branch's history). List
+  # such one-off URLs in testdata-extra/<pipeline_name>.tsv (one URL per
+  # line) and they're fetched here, preserving the URL's own path under
+  # testdata_dir -- gen_local_testconfig.py's URL rewrite doesn't need to
+  # know these came from a different place than the branch clone.
+  local extra_tsv="${SCRIPT_DIR}/testdata-extra/${pipeline_name}.tsv"
+  if [[ -f "${extra_tsv}" ]]; then
+    echo "Fetching extra test assets listed in ${extra_tsv}"
+    local url rel_path dest
+    while IFS= read -r url; do
+      url=${url//$'\r'/}
+      [[ -z "${url}" || "${url:0:1}" == "#" ]] && continue
+      rel_path="${url#https://raw.githubusercontent.com/nf-core/test-datasets/}"
+      rel_path="${rel_path#*/}" # strip the leading <branch-or-sha>/ segment
+      dest="${testdata_dir}/${rel_path}"
+      mkdir -p "$(dirname "${dest}")"
+      echo "  ${url} -> ${dest}"
+      curl -fL -o "${dest}" "${url}"
+    done < "${extra_tsv}"
+  fi
+
+  chmod -R 775 "${testdata_dir}" || true
+}
+
 mkdir -p "${pipeline_dir}"
 cd "${pipeline_dir}"
 
@@ -184,6 +281,10 @@ fi
 chmod -R 775 "${version_dir}"
 if [[ -d "${cache_dir}" ]]; then
   chmod -R 775 "${cache_dir}"
+fi
+
+if [[ "${with_testdata}" == "true" ]]; then
+  stage_testdata "${pipeline_name}" "${install_root}" "${testdata_branch}" "${testdata_repo_url}"
 fi
 
 echo "Done"

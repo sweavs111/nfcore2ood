@@ -28,8 +28,8 @@ if [[ -n "${nf2ood_env_file}" && -r "${nf2ood_env_file}" ]]; then
   source "${nf2ood_env_file}"
 fi
 
-module_name="${NF2OOD_MODULE_NAME:-__NF2OOD_MODULE_NAME__}"
-container_module="${NF2OOD_CONTAINER_MODULE:-__NF2OOD_CONTAINER_MODULE__}"
+module_name="${NF2OOD_MODULE_NAME-__NF2OOD_MODULE_NAME__}"
+container_module="${NF2OOD_CONTAINER_MODULE-__NF2OOD_CONTAINER_MODULE__}"
 pipeline_root="${NF2OOD_PIPELINE_ROOT:-__NF2OOD_PIPELINE_ROOT__}"
 singularity_cache="${NF2OOD_SINGULARITY_CACHEDIR:-__NF2OOD_SINGULARITY_CACHEDIR__}"
 slurm_profile="${NF2OOD_SLURM_PROFILE:-__NF2OOD_SLURM_PROFILE__}"
@@ -50,6 +50,45 @@ if [[ $(type -t module || true) == "function" ]]; then
 fi
 
 export NXF_SINGULARITY_CACHEDIR="${singularity_cache}"
+
+# This pipeline version's nextflow.config (or an included conf/*.config)
+# defines a legacy top-level Groovy function -- almost always check_max(),
+# the pre-2023 nf-core template's way of clamping resource requests to
+# params.max_memory/max_time/max_cpus. Nextflow's newer config parser (v2,
+# the default since ~24.10) is declarative-only and rejects it before the
+# pipeline even starts:
+#   ConfigParseException: Unexpected input: '(' @ line N, column N.
+#      def check_max(obj, type) {
+# Detected once at app-generation time (see config_needs_legacy_parser in
+# nf2ood); baked in here so it applies regardless of which Nextflow module
+# version gets loaded above.
+if [[ "__NF2OOD_FORCE_LEGACY_PARSER__" == "true" ]]; then
+  export NXF_SYNTAX_PARSER=v1
+fi
+
+# Compute nodes typically have no outbound internet, so Nextflow's own
+# "check for a newer version" call on every launch (a plain curl to
+# nextflow.io with no timeout) hangs until the OS-level TCP timeout gives
+# up -- stalling the run before it even starts. Disable it unconditionally;
+# version checks belong on the login node / in module updates, not in
+# every batch job.
+export NXF_DISABLE_CHECK_LATEST=1
+
+# NXF_DISABLE_CHECK_LATEST above only silences the JVM-level upgrade nudge.
+# The `nextflow` launcher script itself does a *separate* plain `curl` to
+# www.nextflow.io as part of its own version check before the JVM even
+# starts, and that one isn't gated by NXF_DISABLE_CHECK_LATEST -- observed
+# hanging for the full ~2min TCP connect timeout on a no-internet compute
+# node before Nextflow proceeded on its own. NXF_OFFLINE also covers plugin
+# registry/index lookups, so set it too: everything this app needs (pipeline
+# code, containers, plugins, custom_config_base) is already staged locally,
+# so Nextflow should never need to reach out at all -- except when the
+# built-in test profile is selected below, which submit.yml.erb routes to
+# the xfer partition specifically so it CAN reach out; don't block that.
+if [[ "<%= context.use_test_profile %>" != "1" ]]; then
+  export NXF_OFFLINE=true
+fi
+
 pipeline_path="${pipeline_root}/__PIPELINE_NAME__/__PIPELINE_VERSION_PATH__"
 export projectDir="${pipeline_path}"
 export baseDir="${pipeline_path}"
@@ -59,10 +98,52 @@ sed -i.bak -E '/:[[:space:]]*,/d; /"[[:space:]]*"/d' nf-params.json
 sed -i.bak -E "s@\$(projectDir)@${projectDir}@g; s@\$(baseDir)@${baseDir}@g; s/\"None\"/null/g" nf-params.json
 rm -f nf-params.json.bak
 
-nextflow_command=(nextflow run "${pipeline_path}" -params-file nf-params.json)
+use_test_profile="<%= context.use_test_profile %>"
+
+# The built-in test profile (-profile test) pulls its samplesheet and
+# reference files from raw.githubusercontent.com at runtime -- and some
+# pipelines hardcode additional test assets directly in their own workflow
+# code, outside conf/test.config or the samplesheet entirely, so no amount
+# of local URL-rewriting can guarantee catching everything a given pipeline
+# version might need. Rather than try to mirror test data locally,
+# submit.yml.erb routes this launch job to the xfer partition whenever this
+# checkbox is checked, so -profile test's network calls just work.
+
+# nf-core's built-in test profile deliberately never sets `outdir` (the
+# pipeline's own conf/test.config documents `--outdir <OUTDIR>` as a
+# required companion flag) -- so outdir must always be passed explicitly,
+# even when the test profile supplies every other parameter and
+# -params-file is skipped below.
+outdir_value="<%= context.outdir.to_s.strip %>"
+
+nextflow_command=(nextflow run "${pipeline_path}")
+
+# The pipeline's built-in test profile ships its own dataset/parameter
+# values via -profile config, which CLI params take precedence over. So
+# when it's selected, skip -params-file entirely rather than let the
+# form's (mostly blank) fields silently override the test dataset.
+if [[ "${use_test_profile}" != "1" ]]; then
+  nextflow_command+=("-params-file" "nf-params.json")
+fi
+
+nextflow_command+=("--outdir" "${outdir_value}")
+
+# Every nf-core pipeline's own nextflow.config unconditionally tries to
+# fetch nfcore_custom.config (and pipeline/<name>.config) from
+# raw.githubusercontent.com/nf-core/configs at config-parse time -- this is
+# what actually defines -profile <institution> (e.g. -profile hazel isn't
+# in the pipeline itself; it lives in that fetched file). Compute nodes
+# have no outbound internet, so that fetch just hangs until the TCP connect
+# times out (~2 min) and kills the run. Point custom_config_base at our
+# central, BRC-maintained fork of nf-core/configs (with our hazel.config)
+# so it resolves from disk instead of the network.
+custom_config_base="${NF2OOD_CUSTOM_CONFIG_BASE:-__NF2OOD_CUSTOM_CONFIG_BASE__}"
+nextflow_command+=("--custom_config_base" "${custom_config_base}")
 
 if [[ "<%= context.executor %>" == "slurm" ]]; then
-  nextflow_command+=("-profile" "${slurm_profile}")
+  profile="${slurm_profile}"
+  [[ "${use_test_profile}" == "1" ]] && profile="test,${profile}"
+  nextflow_command+=("-profile" "${profile}")
 else
   cat > custom.config <<EOF
 cleanup = true
@@ -74,7 +155,9 @@ process {
   ]
 }
 EOF
-  nextflow_command+=("-profile" "singularity" "-c" "custom.config")
+  profile="singularity"
+  [[ "${use_test_profile}" == "1" ]] && profile="test,${profile}"
+  nextflow_command+=("-profile" "${profile}" "-c" "custom.config")
 fi
 
 nextflow_command+=("${resume_flag[@]}")

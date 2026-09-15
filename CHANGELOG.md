@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- Generated apps now surface pipeline success/failure inside the session
+  card. `script.sh.erb` captures Nextflow's real exit code (working around
+  `set -euo pipefail`) and writes a `pipeline_status` file next to
+  `output.log`; `view.html.erb` reads it and shows a green "Success" or red
+  "ERROR (exit code N)" banner. This is a workaround for an OnDemand/OodCore
+  limitation: the session card's own status pill has no failed/error state,
+  so Slurm `FAILED`/`CANCELLED`/etc. all render as "Completed" regardless of
+  the pipeline's actual outcome.
+
+- Documented [`sweavs111/ood_cache_reset`](https://github.com/sweavs111/ood_cache_reset),
+  the standalone OOD sys app that backs every generated app's "cache reset
+  utility" link (`form.template.erb`) and completes the handshake
+  `form.js`'s `resetBatchConnectFormOnce` already implemented client-side.
+  Deploys once per OOD instance into `apps/sys/cache_reset`, from its own
+  repo rather than being vendored here.
+- `NF2OOD_CACHE_RESET_PATH` config variable: the base path of the cache
+  reset utility baked into `form.template.erb`'s "Saved form values" link.
+  Defaults to `/pun/sys/cache_reset`; override it (e.g. to a per-user
+  `/pun/dev/<user>/cache_reset` sandbox deploy) while testing the utility
+  without hand-editing the template.
+- `nf2ood` now generates a "nf-core Pipelines" landing page app
+  (`output_dir/nf-core`) after every run, linking to every currently
+  generated pipeline app grouped by subcategory. It's derived from
+  `output_dir/*/manifest.yml` on each run (via the new
+  `gen_landing_page.py` and `landing_page_template/`), so it stays in sync
+  as pipelines are added, updated, or removed without a separate step.
+- `NF2OOD_APPS_URL_PREFIX` config variable: the base path the landing page
+  links each pipeline card to. Defaults to `/pun/sys/dashboard/apps/show`;
+  override it (e.g. to `/pun/dev/<user>`) while testing apps that haven't
+  been deployed to `apps/sys` yet.
 
 ## [1.4.0] - 2026-06-25
 

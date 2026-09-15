@@ -56,3 +56,9 @@ nf2ood.env
 ood/
 modules/
 generated-apps/
+
+# Personal operational scripts, run logs, and secrets for a site deployment
+# -- not repo source, and bin/ in particular tends to collect site secrets
+# (e.g. nf2ood_secrets.env) that must never be committed.
+bin/
+logs/

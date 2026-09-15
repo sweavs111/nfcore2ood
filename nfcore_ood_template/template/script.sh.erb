@@ -11,6 +11,12 @@ if [[ -z "${workdir// }" ]]; then
   workdir="${HOME}"
 fi
 
+# Captured before cd'ing into $workdir below -- this is the batch_connect
+# session's staged root, i.e. the same directory output.log lives in, so
+# view.html.erb can find the pipeline_status file written at the bottom of
+# this script next to output.log regardless of where the user's workdir is.
+staged_root="$PWD"
+
 mkdir -p "$workdir"
 cp nf-params.json "$workdir/"
 cd "$workdir"
@@ -89,6 +95,13 @@ if [[ "<%= context.use_test_profile %>" != "1" ]]; then
   export NXF_OFFLINE=true
 fi
 
+# The pipeline's own 'validation.monochromeLogs' config option is
+# unrecognized by this Nextflow version (see the WARN it prints every run)
+# and does nothing -- NXF_ANSI_LOG is the mechanism that actually disables
+# Nextflow's live-redraw ANSI/cursor codes, which otherwise pile up
+# (rather than overwrite in place) once output.log isn't a real TTY.
+export NXF_ANSI_LOG=false
+
 pipeline_path="${pipeline_root}/__PIPELINE_NAME__/__PIPELINE_VERSION_PATH__"
 export projectDir="${pipeline_path}"
 export baseDir="${pipeline_path}"
@@ -164,4 +177,23 @@ nextflow_command+=("${resume_flag[@]}")
 
 printf 'Executing: %q ' "${nextflow_command[@]}"
 printf '\n'
+
+# The session card's own status pill only ever reads "Completed" -- OodCore's
+# job status model has no separate failed/error state, so Slurm FAILED,
+# CANCELLED, etc. all collapse into it. Capture Nextflow's real exit code
+# ourselves and drop it next to output.log so view.html.erb can surface
+# success/error inside the card. set +e/-e around the run so a nonzero exit
+# doesn't trip this script's own set -e before the status file gets written;
+# re-exit with the same code afterward so Slurm accounting still sees it.
+set +e
 "${nextflow_command[@]}"
+nextflow_exit_code=$?
+set -e
+
+if [[ ${nextflow_exit_code} -eq 0 ]]; then
+  echo "SUCCESS" > "${staged_root}/pipeline_status"
+else
+  echo "ERROR (exit code ${nextflow_exit_code})" > "${staged_root}/pipeline_status"
+fi
+
+exit "${nextflow_exit_code}"

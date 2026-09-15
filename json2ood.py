@@ -303,9 +303,17 @@ def render_group(group: GroupSpec) -> list[str]:
         f"  {group.normalized_name}:",
         f"    label: {yaml_single_quote(group.label)}",
         "    widget: 'check_box'",
-        "    html_options:",
-        "      data:",
     ]
+
+    # `checked: true` is a plain Rails check_box option that forces the
+    # initial state regardless of any model default -- without it, a group
+    # containing a required field could be hidden on page load with no
+    # visual cue that it needs filling in.
+    if any(field_spec.required for field_spec in group.fields):
+        lines.append("    checked: true")
+
+    lines.append("    html_options:")
+    lines.append("      data:")
 
     for field_spec in group.fields:
         for field_name in rendered_field_names(field_spec):

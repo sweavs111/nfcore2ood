@@ -107,7 +107,8 @@ clear message if unset (`validate_environment`): `NF2OOD_PIPELINE_ROOT`,
 `NF2OOD_SINGULARITY_CACHEDIR`, `NF2OOD_PARTITION_YML`. `NF2OOD_SLURM_PROFILE`
 is **SOFT (warn)** — falls back to `default` with a one-shot warning. Every
 other `NF2OOD_*` var (`NF2OOD_CLUSTER`, `NF2OOD_DEFAULT_DIRECTORY`,
-`NF2OOD_MODULE_NAME`, `NF2OOD_CONTAINER_MODULE`, `NF2OOD_ENV_FILE`) is
+`NF2OOD_MODULE_NAME`, `NF2OOD_CONTAINER_MODULE`, `NF2OOD_ENV_FILE`,
+`NF2OOD_CACHE_RESET_PATH`, `NF2OOD_APPS_URL_PREFIX`) is
 **SOFT** with a safe cross-site default via `config_value()`. Module name
 vars use `${VAR-default}` (no colon) specifically so an explicit empty
 string means "skip this `module load`" — see the comment in
@@ -156,6 +157,59 @@ to the pipeline slug for `nf-core-*` names or `bioinformatics` otherwise.
 `view.html.erb`; both are simple two-column TSVs read with the same
 `lookup_tsv_value` bash helper (case-insensitive key match, `#`-comments).
 
+### Cache reset utility
+
+`form.template.erb`'s "Saved form values" notice links every generated app
+to `__NF2OOD_CACHE_RESET_PATH__/?app_slug=<slug>&return_url=...`
+(`NF2OOD_CACHE_RESET_PATH`, default `/pun/sys/cache_reset` — see Config
+precedence above), and `form.js`'s `resetBatchConnectFormOnce` implements
+the client half of the handshake (blanks all visible fields when reloaded
+with `?cache_reset=1`). The other half — an OOD app that actually deletes
+the cached
+`~/ondemand/data/sys/dashboard/batch_connect/cache/<role>_<app_slug>.json`
+file and redirects back with `cache_reset=1&cache_reset_at=<epoch>` — lives
+in its own repo,
+[`sweavs111/ood_cache_reset`](https://github.com/sweavs111/ood_cache_reset)
+(a dependency-free-Ruby-stdlib port of Tufts' `TuftsRT/tufts_ood_cache_reset`),
+rather than being vendored here — it's a generic Batch Connect utility with
+its own release cycle, not specific to nf-core pipelines. Unlike everything
+else nf2ood touches, it's not generated per pipeline — production deploys
+land once per OOD instance, straight into `apps/sys/cache_reset` (root-owned,
+so that's a manual clone + `rsync` + `sudo` step; see that repo's README).
+While testing it, deploy it instead to a per-user `~/ondemand/dev/cache_reset`
+sandbox (no `sudo` needed) and set `NF2OOD_CACHE_RESET_PATH` to the matching
+`/pun/dev/<user>/cache_reset` path in `nf2ood.env` — regenerating apps then
+points every link at the sandbox copy instead of hand-editing
+`form.template.erb` and having to remember to revert it before the real
+`apps/sys/cache_reset` deploy.
+
+### Landing page
+
+`nf2ood` writes one more app per run (skipped on `--dry-run`):
+`output_dir/nf-core`, a static "nf-core Pipelines" index page grouping
+every currently-generated app into cards by subcategory. Unlike the
+per-pipeline apps, it isn't driven by a list this run generated -- `nf2ood:
+generate_landing_page` calls `gen_landing_page.py`, which globs
+`output_dir/*/manifest.yml`, keeps only manifests with `role:
+batch_connect` (this is also what excludes the landing app's own manifest,
+which has no `role` key, from a later re-run), and groups by each
+manifest's `subcategory` field. Because it re-derives its content from
+`output_dir` on every invocation rather than being handed the app list,
+it stays correct after a filtered `-p`/`-v` run (the new/updated app just
+shows up) as well as a full run (stale apps disappear along with their
+directories). Each card links to
+`NF2OOD_APPS_URL_PREFIX/<app-dir-name>` (default
+`/pun/sys/dashboard/apps/show`, same soft-default/override pattern as
+`NF2OOD_CACHE_RESET_PATH` -- flip it to a `/pun/dev/<user>` sandbox prefix
+while testing). Static assets (`manifest.yml`, `index.template.html` with
+its `__SECTIONS__` splice point, same convention as
+`nf-params.template.erb`'s `__NF_PARAMS_ENTRIES__`) live in
+`landing_page_template/`; `icon.png` isn't duplicated there and is instead
+copied from `nfcore_ood_template/icon.png` at generation time. Like
+`stage_local_testconfig`, this step is best-effort -- a failure only logs a
+warning, since the pipeline apps it links to already generated
+successfully either way.
+
 ## Repository layout
 
 ```
@@ -163,6 +217,7 @@ nf2ood                        # orchestrator (bash)
 json2ood.py                   # schema -> form.yml.erb / nf-params.json.erb
 customize_app.py              # __TOKEN__ substitution over the app dir
 gen_local_testconfig.py       # conf/test.config -> offline local_test.config
+gen_landing_page.py           # output_dir/*/manifest.yml -> output_dir/nf-core landing page
 download_nfcore_pipeline.sh   # stage 1: nf-core pipeline downloader (+ --with-testdata)
 nf2ood.env.example            # checked-in site config template (nf2ood.env is gitignored)
 pipeline2subcategory.tsv      # pipeline -> OOD subcategory
@@ -176,6 +231,9 @@ nfcore_ood_template/          # the OOD batch-connect app template, copied per a
   manifest.yml / submit.yml.erb / view.html.erb
   template/before.sh.erb      # OOD batch-connect conn_params setup
   template/script.sh.erb      # the actual `nextflow run` launch script
+landing_page_template/        # static assets for the generated landing page
+  manifest.yml                # unparameterized; copied as-is
+  index.template.html         # __SECTIONS__ splice point for per-subcategory cards
 ```
 
 Each `<pipeline>-<version>` directory under a generated `--output` tree is a

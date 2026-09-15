@@ -1,0 +1,7 @@
+---
+name: "nf-core Pipelines"
+category: "Interactive Apps"
+subcategory: "Bioinformatics"
+description: |
+  Browse and launch [nf-core](https://nf-co.re) Nextflow pipelines
+  available on this system.

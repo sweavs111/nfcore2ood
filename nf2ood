@@ -396,7 +396,7 @@ customize_generated_app() {
   local rendered_cluster rendered_default_directory rendered_module_name
   local rendered_pipeline_root rendered_singularity_cache rendered_slurm_profile
   local rendered_container_module rendered_partition_partial rendered_env_file
-  local rendered_custom_config_base
+  local rendered_custom_config_base rendered_cache_reset_path
 
   app_slug="$(basename "$app_dir")"
   version_path="${pipeline_version}/${pipeline_version//./_}"
@@ -421,6 +421,12 @@ customize_generated_app() {
   # ours) that don't. Sites without a local nf-core/configs mirror just get
   # nf-core's own default back, unchanged.
   rendered_custom_config_base="$(config_value NF2OOD_CUSTOM_CONFIG_BASE "https://raw.githubusercontent.com/nf-core/configs/master")"
+
+  # Where the cache_reset sys app (github.com/sweavs111/ood_cache_reset) is
+  # reachable. Defaults to its normal production path; override locally
+  # (e.g. to a /pun/dev/<user>/cache_reset sandbox deploy) while testing so
+  # you don't have to hand-edit form.template.erb and remember to revert it.
+  rendered_cache_reset_path="$(config_value NF2OOD_CACHE_RESET_PATH "/pun/sys/cache_reset")"
 
   # Module names use ${var-default} (no colon) so that an explicit empty
   # value in nf2ood.env means "do not load a module for this slot". Sites
@@ -464,9 +470,45 @@ customize_generated_app() {
     --set "__NF2OOD_SLURM_PROFILE__=${rendered_slurm_profile}"
     --set "__NF2OOD_ENV_FILE__=${rendered_env_file}"
     --set "__NF2OOD_CUSTOM_CONFIG_BASE__=${rendered_custom_config_base}"
+    --set "__NF2OOD_CACHE_RESET_PATH__=${rendered_cache_reset_path}"
   )
 
   python3 "$REPO_ROOT/customize_app.py" "$app_dir" "${customize_args[@]}"
+}
+
+generate_landing_page() {
+  # Regenerates the "nf-core Pipelines" landing page app (output_dir/nf-core)
+  # by scanning output_dir for the batch-connect apps currently there. Runs
+  # after every non-dry-run invocation, including filtered ones, so it
+  # reflects whatever pipelines/versions are actually present -- not just
+  # what this particular run touched. Best-effort: a failure here does not
+  # fail the overall run, since the individual pipeline apps it links to are
+  # unaffected either way.
+  local output_dir=$1
+
+  local landing_app_dir="${output_dir}/nf-core"
+
+  if [[ "${DRY_RUN:-false}" == "true" ]]; then
+    log "[DRY-RUN] Would regenerate landing page app: ${landing_app_dir}"
+    return 0
+  fi
+
+  # Where the generated pipeline apps are actually reachable from. Defaults
+  # to the normal production apps/show route; override locally (e.g. to a
+  # /pun/dev/<user> sandbox) while testing, same pattern as
+  # NF2OOD_CACHE_RESET_PATH.
+  local rendered_apps_url_prefix
+  rendered_apps_url_prefix="$(config_value NF2OOD_APPS_URL_PREFIX "/pun/sys/dashboard/apps/show")"
+
+  log "Generating nf-core landing page"
+  if ! python3 "$REPO_ROOT/gen_landing_page.py" \
+       "$output_dir" \
+       "$landing_app_dir" \
+       "$rendered_apps_url_prefix" \
+       "${REPO_ROOT}/landing_page_template" \
+       "${TEMPLATE_ROOT}/icon.png"; then
+    log "WARNING: failed to generate the nf-core landing page (non-fatal; individual pipeline apps are unaffected)"
+  fi
 }
 
 generate_app() {
@@ -678,6 +720,8 @@ main() {
       fi
     done < <(list_versions "${INPUT_DIR}/${pipeline_name}")
   done < <(list_pipelines "$INPUT_DIR")
+
+  generate_landing_page "$OUTPUT_DIR"
 
   print_summary
 

@@ -1,3 +1,21 @@
+// bootstrap_form (used by OOD's batch_connect forms) tags the <label> of any
+// required field with a `required` CSS class but intentionally ships no
+// styling for it (see https://github.com/bootstrap-ruby/bootstrap_form —
+// "bootstrap_form doesn't provide any styling for required fields"). Without
+// this, users only ever see the browser's native "please fill this field"
+// popup on submit, with no visual cue beforehand.
+(function injectRequiredFieldIndicatorStyle() {
+  const style = document.createElement("style");
+  style.textContent = `
+    label.required::after {
+      content: " *";
+      color: #dc3545;
+      font-weight: 700;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
 function resetBatchConnectFormOnce() {
   const url = new URL(window.location.href);
   const needsReset =

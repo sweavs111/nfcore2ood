@@ -17,6 +17,16 @@ fi
 # this script next to output.log regardless of where the user's workdir is.
 staged_root="$PWD"
 
+# OOD's session "cancel"/"delete" button runs `scancel`, which sends SIGTERM
+# (then SIGKILL after Slurm's kill-wait grace period) to this whole job
+# step -- both this script and the nextflow child below get signalled
+# directly, so the exit-code handling at the bottom is never reached and no
+# pipeline_status file gets written. Trap SIGTERM here so a cancelled run
+# still produces one for completed.html.erb to report. Slurm signals the
+# full process group at once, so nextflow dies too and this script's `wait`
+# on it returns almost immediately, after which bash runs the pending trap.
+trap 'echo "ERROR (cancelled)" > "${staged_root}/pipeline_status"; exit 143' TERM
+
 mkdir -p "$workdir"
 cp nf-params.json "$workdir/"
 cd "$workdir"
@@ -195,5 +205,9 @@ if [[ ${nextflow_exit_code} -eq 0 ]]; then
 else
   echo "ERROR (exit code ${nextflow_exit_code})" > "${staged_root}/pipeline_status"
 fi
+
+# Disarm the cancellation trap now that the real outcome has been recorded,
+# so a signal received during this script's own shutdown can't overwrite it.
+trap - TERM
 
 exit "${nextflow_exit_code}"

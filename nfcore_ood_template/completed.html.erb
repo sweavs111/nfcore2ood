@@ -1,0 +1,19 @@
+<%# Rendered only once the session has completed (see BatchConnect::Session
+#render_completed_view / #session_completed_view in the OnDemand dashboard
+source) -- this is why the success/error banner lives here rather than in
+view.html.erb, which stops being rendered the moment the job leaves the
+"running" state and OnDemand falls back to its own generic completed-session
+partial instead.
+
+Reads the pipeline_status file script.sh.erb writes next to output.log
+(staged_root is a BatchConnect::Session accessor, in scope here because this
+template is evaluated against the Session instance's own binding). %>
+<%
+status_file = staged_root.join("pipeline_status")
+pipeline_status = status_file.file? ? status_file.read.strip : nil
+%>
+<% if pipeline_status == "SUCCESS" %>
+  <div class="alert alert-success mb-0">Pipeline finished: <strong>Success</strong></div>
+<% elsif pipeline_status %>
+  <div class="alert alert-danger mb-0">Pipeline finished: <strong><%= ERB::Util.html_escape(pipeline_status) %></strong></div>
+<% end %>

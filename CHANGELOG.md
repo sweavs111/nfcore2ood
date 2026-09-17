@@ -10,13 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Generated apps now surface pipeline success/failure inside the session
-  card. `script.sh.erb` captures Nextflow's real exit code (working around
-  `set -euo pipefail`) and writes a `pipeline_status` file next to
-  `output.log`; `view.html.erb` reads it and shows a green "Success" or red
-  "ERROR (exit code N)" banner. This is a workaround for an OnDemand/OodCore
-  limitation: the session card's own status pill has no failed/error state,
-  so Slurm `FAILED`/`CANCELLED`/etc. all render as "Completed" regardless of
-  the pipeline's actual outcome.
+  card once a run finishes. `script.sh.erb` captures Nextflow's real exit
+  code (working around `set -euo pipefail`) and writes a `pipeline_status`
+  file next to `output.log`; the new `completed.html.erb` (rendered by
+  OnDemand only once `session.completed?`, via its `session_completed_view`
+  mechanism -- distinct from `view.html.erb`, which stops being rendered the
+  moment the job leaves the "running" state) reads it and shows a green
+  "Success" or red "ERROR (exit code N)" banner. This is a workaround for an
+  OnDemand/OodCore limitation: the session card's own status pill has no
+  failed/error state, so Slurm `FAILED`/`CANCELLED`/etc. all render as
+  "Completed" regardless of the pipeline's actual outcome.
+- `script.sh.erb` traps `SIGTERM` so cancelling a session (OOD's cancel/
+  delete button, which runs `scancel`) still produces a `pipeline_status` of
+  `ERROR (cancelled)` for `completed.html.erb` to show. Without the trap,
+  Slurm signals the whole job step -- this script and the Nextflow child --
+  at once, so the exit-code handling at the bottom of the script was never
+  reached and cancelled runs showed no banner at all.
 
 - Documented [`sweavs111/ood_cache_reset`](https://github.com/sweavs111/ood_cache_reset),
   the standalone OOD sys app that backs every generated app's "cache reset
@@ -39,6 +48,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   links each pipeline card to. Defaults to `/pun/sys/dashboard/apps/show`;
   override it (e.g. to `/pun/dev/<user>`) while testing apps that haven't
   been deployed to `apps/sys` yet.
+
+### Fixed
+
+- Generated app directories, the landing page app, and the top-level
+  `--output` directory are now normalized to `755` (dirs) / `644` (files)
+  after generation, so every file is "other"-readable once the output tree
+  is copied out to an Open OnDemand host and read there by the OOD service
+  account rather than by whoever ran `nf2ood`. Previously, permissions on
+  generated apps depended on the operator's umask and on `nfcore_ood_template`'s
+  own checked-in modes (some of which lacked "other" read entirely); `cp -R`
+  can only narrow permissions via umask, never widen them, so a template
+  file missing other-read stayed that way in every app generated from it.
+  Nothing under a generated app is executed directly (OOD renders the
+  `.erb`/`.yml`/`.html`/`.js`/`.png` files as templates/data and writes its
+  own `script.sh` elsewhere at submit time), so no file needs an execute bit.
+- Fixed several files under `nfcore_ood_template/` that were checked into
+  git as executable (`100755`) despite being plain data/template files
+  (`README.md`, `manifest.yml`, `form.template.erb`, `submit.yml.erb`,
+  `view.html.erb`, etc.) and removed a stray `.DS_Store` that had been
+  accidentally tracked.
 
 ## [1.4.0] - 2026-06-25
 

@@ -2,12 +2,6 @@
 This will appear once the job begins running. %>
 <%
 log_tail = []
-pipeline_status = nil
-
-if output_log_path.to_s != ""
-  status_path = File.join(File.dirname(output_log_path), "pipeline_status")
-  pipeline_status = File.read(status_path).strip if File.file?(status_path)
-end
 
 if output_log_path.to_s != "" && File.file?(output_log_path)
   File.open(output_log_path, "r") do |file|
@@ -16,12 +10,6 @@ if output_log_path.to_s != "" && File.file?(output_log_path)
 end
 %>
 <p>The pipeline does not offer an interactive interface. <a href="/pun/sys/files/fs/<%= working_path %>">You can find your output files here.</a></p>
-
-<% if pipeline_status == "SUCCESS" %>
-  <div class="alert alert-success">Pipeline finished: <strong>Success</strong></div>
-<% elsif pipeline_status %>
-  <div class="alert alert-danger">Pipeline finished: <strong><%= ERB::Util.html_escape(pipeline_status) %></strong></div>
-<% end %>
 
 <div class="ood-appkit-card">
   <h3>Running log</h3>

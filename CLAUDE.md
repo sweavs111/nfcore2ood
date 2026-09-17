@@ -9,19 +9,9 @@ downloaded nf-core pipelines. It has two stages, kept deliberately separate:
 
 1. `download_nfcore_pipeline.sh` downloads an nf-core pipeline/revision into
    a local pipeline tree (via `nf-core pipelines download`) and symlinks each
-   pipeline's `configs/` to a shared, centrally-maintained copy. With
-   `--with-testdata`, it also clones that pipeline's nf-core/test-datasets
-   branch (`pipeline2testbranch.tsv` maps pipeline -> branch when they
-   differ) into `NF2OOD_TESTDATA_ROOT/<pipeline>`, plus any one-off URLs in
-   `testdata-extra/<pipeline>.tsv` for params pinned to a commit outside
-   that branch.
+   pipeline's `configs/` to a shared, centrally-maintained copy.
 2. `nf2ood` scans that pipeline tree, finds each `nextflow_schema.json`, and
-   generates one OOD batch-connect app directory per pipeline version. If a
-   `--with-testdata` clone exists for the pipeline, it also runs
-   `gen_local_testconfig.py` to rewrite that pipeline's `conf/test.config`
-   (and the samplesheet its `input` param points at) into a local,
-   network-free `local_test.config` bundled into the app -- see "Offline
-   test profile" below.
+   generates one OOD batch-connect app directory per pipeline version.
 
 All site-specific values (paths, cluster name, Slurm profile, module names)
 live in `nf2ood.env` (gitignored), copied from `nf2ood.env.example` (checked
@@ -102,10 +92,10 @@ delegates that to two Python scripts:
 
 ### Config precedence (site adaptation)
 
-`nf2ood` validates three **REQUIRED** env vars up front and dies with a
+`nf2ood` validates two **REQUIRED** env vars up front and dies with a
 clear message if unset (`validate_environment`): `NF2OOD_PIPELINE_ROOT`,
-`NF2OOD_SINGULARITY_CACHEDIR`, `NF2OOD_PARTITION_YML`. `NF2OOD_SLURM_PROFILE`
-is **SOFT (warn)** — falls back to `default` with a one-shot warning. Every
+`NF2OOD_SINGULARITY_CACHEDIR`. `NF2OOD_SLURM_PROFILE` is **SOFT (warn)** —
+falls back to `default` with a one-shot warning. Every
 other `NF2OOD_*` var (`NF2OOD_CLUSTER`, `NF2OOD_DEFAULT_DIRECTORY`,
 `NF2OOD_MODULE_NAME`, `NF2OOD_CONTAINER_MODULE`, `NF2OOD_ENV_FILE`,
 `NF2OOD_CACHE_RESET_PATH`, `NF2OOD_APPS_URL_PREFIX`) is
@@ -123,30 +113,20 @@ change e.g. `NF2OOD_SLURM_PROFILE` without regenerating every app, as long
 as the same env file path is visible from both the OOD host and compute
 nodes.
 
-### Offline test profile
+### Built-in test profile
 
 Every generated app has a "Run pipeline's built-in test profile" checkbox
 (`use_test_profile` in `form.template.erb`, wired up in `script.sh.erb`).
 nf-core's own `-profile test` pulls its dataset from
 `raw.githubusercontent.com/nf-core/test-datasets`, which fails on sites
-where compute nodes have no outbound internet.
-
-`gen_local_testconfig.py` closes that gap when a pipeline was downloaded
-with `--with-testdata`: it regex-rewrites every
-`raw.githubusercontent.com/nf-core/test-datasets/<ref>/...` URL in the
-pipeline's `conf/test.config` to the matching local path under
-`NF2OOD_TESTDATA_ROOT/<pipeline>`, recursing once into the samplesheet the
-`input` param points at (which embeds the same URL pattern for per-sample
-fastq columns). `nf2ood` calls it per app (`stage_local_testconfig`) and
-writes the result to `template/local_test.config`, a no-op if no local
-clone exists for that pipeline. At runtime, `script.sh.erb` uses
-`local_test.config` via `-c` and drops `test` from `-profile` when the file
-is present; otherwise it falls back to `-profile test` unchanged. Because
-the rewrite is a generic URL substitution rather than a per-pipeline
-mapping, it works for any pipeline once `--with-testdata` has staged its
-branch -- the one documented exception is a param pinned to a commit
-outside that branch (nf-core/rnaseq's `kraken_db`), handled via
-`testdata-extra/<pipeline>.tsv`.
+where compute nodes have no outbound internet. `submit.yml.erb` routes the
+launch job to the `xfer` partition (the one partition with outbound
+internet) whenever the checkbox is checked, so `-profile test`'s network
+calls just work -- no local mirroring of test data is attempted, since some
+pipelines hardcode additional test assets directly in their own workflow
+code, outside `conf/test.config` or the samplesheet entirely, so no amount
+of local URL-rewriting could guarantee catching everything a given pipeline
+version needs anyway.
 
 ### Subcategory mapping
 
@@ -205,10 +185,9 @@ while testing). Static assets (`manifest.yml`, `index.template.html` with
 its `__SECTIONS__` splice point, same convention as
 `nf-params.template.erb`'s `__NF_PARAMS_ENTRIES__`) live in
 `landing_page_template/`; `icon.png` isn't duplicated there and is instead
-copied from `nfcore_ood_template/icon.png` at generation time. Like
-`stage_local_testconfig`, this step is best-effort -- a failure only logs a
-warning, since the pipeline apps it links to already generated
-successfully either way.
+copied from `nfcore_ood_template/icon.png` at generation time. This step is
+best-effort -- a failure only logs a warning, since the pipeline apps it
+links to already generated successfully either way.
 
 ## Repository layout
 
@@ -216,14 +195,11 @@ successfully either way.
 nf2ood                        # orchestrator (bash)
 json2ood.py                   # schema -> form.yml.erb / nf-params.json.erb
 customize_app.py              # __TOKEN__ substitution over the app dir
-gen_local_testconfig.py       # conf/test.config -> offline local_test.config
 gen_landing_page.py           # output_dir/*/manifest.yml -> output_dir/nf-core landing page
-download_nfcore_pipeline.sh   # stage 1: nf-core pipeline downloader (+ --with-testdata)
+download_nfcore_pipeline.sh   # stage 1: nf-core pipeline downloader
 nf2ood.env.example            # checked-in site config template (nf2ood.env is gitignored)
 pipeline2subcategory.tsv      # pipeline -> OOD subcategory
 pipeline2image.tsv            # pipeline -> workflow diagram URL (view.html.erb)
-pipeline2testbranch.tsv       # pipeline -> nf-core/test-datasets branch (--with-testdata)
-testdata-extra/<pipeline>.tsv # per-pipeline test asset URLs outside its test-datasets branch
 nfcore_ood_template/          # the OOD batch-connect app template, copied per app
   form.template.erb           # static base fields json2ood.py appends generated groups to
   nf-params.template.erb      # Ruby helpers + __NF_PARAMS_ENTRIES__ placeholder

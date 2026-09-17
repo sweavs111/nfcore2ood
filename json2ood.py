@@ -35,10 +35,6 @@ PATH_FORMATS = {"file-path", "path", "directory-path"}
 STATIC_FORM_FIELDS = [
     "bc_num_hours",
     "nextflow_version",
-    "executor",
-    "partition",
-    "num_cores",
-    "num_memory",
     "workdir",
     "use_test_profile",
 ]

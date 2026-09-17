@@ -25,34 +25,6 @@ attributes:
 
 __NEXTFLOW_VERSION_FIELD__
 
-<%= File.read("__NF2OOD_PARTITION_YML__").indent(2) %>
-
-  num_cores:
-    label: Number of cores
-    widget: number_field
-    value: 4
-    min: 1
-    step: 1
-    help: CPU count used for single-node local execution.
-
-  num_memory:
-    label: Amount of memory (GB)
-    widget: number_field
-    value: 8
-    min: 1
-    step: 1
-    help: Memory requested for single-node local execution.
-
-  executor:
-    label: Which Nextflow executor should be used?
-    widget: select
-    options:
-      - ["slurm", "slurm", data-hide-partition: true, data-hide-num-cores: true, data-hide-num-memory: true]
-      - ["local", "local"]
-    help: |
-      With `slurm`, the pipeline uses its configured scheduler profile.
-      With `local`, tasks run on the submitted node using a generated config.
-
   workdir:
     label: Working directory
     widget: path_selector
@@ -79,7 +51,7 @@ __NEXTFLOW_VERSION_FIELD__
       The built-in test profile fetches its dataset from
       raw.githubusercontent.com at runtime, so checking this box routes the
       launch job to the `xfer` partition (the only one with outbound
-      internet) instead of your selected partition.
+      internet).
 
   resume:
     label: Resume previous run

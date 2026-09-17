@@ -89,7 +89,6 @@ validate_environment() {
   # config_value() in customize_generated_app.
   require_env NF2OOD_PIPELINE_ROOT >/dev/null
   require_env NF2OOD_SINGULARITY_CACHEDIR >/dev/null
-  require_env NF2OOD_PARTITION_YML >/dev/null
 
   if [[ -z "${NF2OOD_SLURM_PROFILE:-}" ]]; then
     log "WARNING: NF2OOD_SLURM_PROFILE is not set. Falling back to 'default'. Generated apps will not use a site-specific Nextflow profile."
@@ -130,6 +129,9 @@ prepare_output_dir() {
   fi
 
   mkdir -p "$target_dir"
+  # Not just the app dirs inside: the container itself must be traversable
+  # by "other" or nothing generated within it is reachable either.
+  chmod 755 "$target_dir"
 }
 
 list_pipelines() {
@@ -355,36 +357,6 @@ determine_subcategory() {
   esac
 }
 
-stage_local_testconfig() {
-  # Best-effort: writes app_dir/template/local_test.config when a local
-  # nf-core/test-datasets clone is staged for this pipeline (see
-  # download_nfcore_pipeline.sh --with-testdata), so the generated
-  # script.sh.erb can run the "test profile" checkbox with `-c
-  # local_test.config` instead of the network-dependent `-profile test`.
-  # Never fails app generation on its own -- a missing local_test.config
-  # just means script.sh.erb falls back to `-profile test` as before.
-  local app_dir=$1
-  local pipeline_name=$2
-  local pipeline_dir=$3
-
-  local pipeline_slug="${pipeline_name#nf-core-}"
-  local testdata_root="${NF2OOD_TESTDATA_ROOT:-$(dirname "$NF2OOD_PIPELINE_ROOT")/testdata}"
-  local testdata_dir="${testdata_root}/${pipeline_slug}"
-
-  if [[ ! -d "$testdata_dir" ]]; then
-    return 0
-  fi
-
-  if python3 "$REPO_ROOT/gen_local_testconfig.py" \
-       "$pipeline_dir" "$testdata_dir" "${app_dir}/template/local_test.config"; then
-    if [[ -f "${app_dir}/template/local_test.config" ]]; then
-      log "  Local test data found at ${testdata_dir}; generated local_test.config"
-    fi
-  else
-    log "WARNING: gen_local_testconfig.py failed for ${pipeline_name} (non-fatal; test profile will use -profile test)"
-  fi
-}
-
 customize_generated_app() {
   local app_dir=$1
   local pipeline_name=$2
@@ -395,7 +367,7 @@ customize_generated_app() {
   local app_slug version_path subcategory
   local rendered_cluster rendered_default_directory rendered_module_name
   local rendered_pipeline_root rendered_singularity_cache rendered_slurm_profile
-  local rendered_container_module rendered_partition_partial rendered_env_file
+  local rendered_container_module rendered_env_file
   local rendered_custom_config_base rendered_cache_reset_path
 
   app_slug="$(basename "$app_dir")"
@@ -405,7 +377,6 @@ customize_generated_app() {
   # Required (validated up front by validate_environment).
   rendered_pipeline_root="$(require_env NF2OOD_PIPELINE_ROOT)"
   rendered_singularity_cache="$(require_env NF2OOD_SINGULARITY_CACHEDIR)"
-  rendered_partition_partial="$(require_env NF2OOD_PARTITION_YML)"
 
   # Soft default; a warning is emitted once in validate_environment when unset.
   rendered_slurm_profile="${NF2OOD_SLURM_PROFILE:-default}"
@@ -460,7 +431,6 @@ customize_generated_app() {
     --set "__SUBCATEGORY__=${subcategory}"
     --set "__NF2OOD_CLUSTER__=${rendered_cluster}"
     --set "__NF2OOD_DEFAULT_DIRECTORY__=${rendered_default_directory}"
-    --set "__NF2OOD_PARTITION_YML__=${rendered_partition_partial}"
     --set "__NF2OOD_MODULE_NAME__=${rendered_module_name}"
     --set "__NEXTFLOW_VERSION_FIELD__=${rendered_nextflow_version_field}"
     --set "__NF2OOD_FORCE_LEGACY_PARSER__=${rendered_force_legacy_parser}"
@@ -474,6 +444,21 @@ customize_generated_app() {
   )
 
   python3 "$REPO_ROOT/customize_app.py" "$app_dir" "${customize_args[@]}"
+}
+
+normalize_permissions() {
+  # Generated apps are copied out to Open OnDemand hosts and read there by
+  # the OOD service account, not by whoever ran nf2ood -- so permissions
+  # can't depend on the operator's umask or on the checked-in template's
+  # own modes (cp -R can only narrow permissions via umask, never widen
+  # them, so a source file missing other-read stays that way forever
+  # otherwise). Nothing under an app dir is ever executed directly: OOD
+  # renders the .erb/.yml/.html/.js/.png files as templates and data and
+  # writes its own script.sh elsewhere at submit time. Uniform 755/644 is
+  # therefore correct, not just permissive.
+  local dir=$1
+  find "$dir" -type d -exec chmod 755 {} +
+  find "$dir" -type f -exec chmod 644 {} +
 }
 
 generate_landing_page() {
@@ -509,6 +494,8 @@ generate_landing_page() {
        "${TEMPLATE_ROOT}/icon.png"; then
     log "WARNING: failed to generate the nf-core landing page (non-fatal; individual pipeline apps are unaffected)"
   fi
+
+  [[ -d "$landing_app_dir" ]] && normalize_permissions "$landing_app_dir"
 }
 
 generate_app() {
@@ -566,13 +553,13 @@ generate_app() {
 
   rm -f "$base_form" "$base_params"
 
-  stage_local_testconfig "$app_dir" "$pipeline_name" "$(dirname "$schema_path")"
-
   if ! customize_generated_app "$app_dir" "$pipeline_name" "$pipeline_version" "$schema_path"; then
     log "WARNING: customize step failed for ${pipeline_name} ${pipeline_version}; skipping."
     rm -rf "$app_dir"
     return 1
   fi
+
+  normalize_permissions "$app_dir"
 }
 
 parse_args() {
@@ -679,6 +666,7 @@ main() {
       log "Filter active: --force ignored so unrelated apps in ${OUTPUT_DIR} are preserved."
     fi
     mkdir -p "$OUTPUT_DIR"
+    chmod 755 "$OUTPUT_DIR"
   else
     prepare_output_dir "$OUTPUT_DIR" "$FORCE_OVERWRITE"
   fi

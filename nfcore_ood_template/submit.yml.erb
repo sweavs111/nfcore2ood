@@ -26,18 +26,7 @@ script:
     - "--qos"
     - "xfer"
     <%- end -%>
-    <%- if executor == "slurm" -%>
     - "-n"
     - "2"
     - "--mem"
     - "12G"
-    <%- elsif executor == "local" -%>
-    - "-n"
-    - "<%= num_cores %>"
-    - "--mem"
-    - "<%= num_memory %>G"
-    <%- if use_test_profile.to_s != "1" && partition.to_s.strip != "" -%>
-    - "-p"
-    - "<%= partition %>"
-    <%- end -%>
-    <%- end -%>

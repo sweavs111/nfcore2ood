@@ -163,25 +163,9 @@ nextflow_command+=("--outdir" "${outdir_value}")
 custom_config_base="${NF2OOD_CUSTOM_CONFIG_BASE:-__NF2OOD_CUSTOM_CONFIG_BASE__}"
 nextflow_command+=("--custom_config_base" "${custom_config_base}")
 
-if [[ "<%= context.executor %>" == "slurm" ]]; then
-  profile="${slurm_profile}"
-  [[ "${use_test_profile}" == "1" ]] && profile="test,${profile}"
-  nextflow_command+=("-profile" "${profile}")
-else
-  cat > custom.config <<EOF
-cleanup = true
-
-process {
-  resourceLimits = [
-    cpus: <%= context.num_cores %>,
-    memory: "<%= context.num_memory %> GB"
-  ]
-}
-EOF
-  profile="singularity"
-  [[ "${use_test_profile}" == "1" ]] && profile="test,${profile}"
-  nextflow_command+=("-profile" "${profile}" "-c" "custom.config")
-fi
+profile="${slurm_profile}"
+[[ "${use_test_profile}" == "1" ]] && profile="test,${profile}"
+nextflow_command+=("-profile" "${profile}")
 
 nextflow_command+=("${resume_flag[@]}")
 

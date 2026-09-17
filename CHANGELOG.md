@@ -69,6 +69,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `view.html.erb`, etc.) and removed a stray `.DS_Store` that had been
   accidentally tracked.
 
+### Removed
+
+- The "local" Nextflow executor option, and its `partition`/`num_cores`/
+  `num_memory` form fields, have been removed from generated apps -- `slurm`
+  is now the only executor. `NF2OOD_PARTITION_YML` is no longer a required
+  (or used) config variable; sites that had a partition partial configured
+  for it can leave that file in place unused, or delete it.
+- The offline test-data staging pipeline (`download_nfcore_pipeline.sh
+  --with-testdata`, `gen_local_testconfig.py`, `pipeline2testbranch.tsv`,
+  `testdata-extra/<pipeline>.tsv`, and the `NF2OOD_TESTDATA_ROOT`/
+  `NF2OOD_TESTDATA_REPO_URL` config variables) has been removed. It
+  generated a `local_test.config` that the runtime script never actually
+  read -- the "Run pipeline's built-in test profile" checkbox has always
+  used the real `-profile test`, routed through the `xfer` partition for
+  outbound internet, instead.
+
 ## [1.4.0] - 2026-06-25
 
 This release simplifies how generated Open OnDemand apps handle nf-core

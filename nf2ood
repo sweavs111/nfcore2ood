@@ -452,13 +452,17 @@ normalize_permissions() {
   # can't depend on the operator's umask or on the checked-in template's
   # own modes (cp -R can only narrow permissions via umask, never widen
   # them, so a source file missing other-read stays that way forever
-  # otherwise). Nothing under an app dir is ever executed directly: OOD
-  # renders the .erb/.yml/.html/.js/.png files as templates and data and
-  # writes its own script.sh elsewhere at submit time. Uniform 755/644 is
-  # therefore correct, not just permissive.
+  # otherwise). Uniform 644 is correct for almost everything here, since OOD
+  # renders the .erb/.yml/.html/.js/.png files as templates and data -- with
+  # one exception: OOD stages template/script.sh.erb into the session's
+  # output dir as script.sh and the generated Slurm wrapper executes that
+  # file directly by path (before.sh is only `source`d, so it doesn't need
+  # +x -- see template/before.sh.erb), so it has to keep its execute bit or
+  # the job fails at submit time with "Permission denied".
   local dir=$1
   find "$dir" -type d -exec chmod 755 {} +
   find "$dir" -type f -exec chmod 644 {} +
+  [[ -f "$dir/template/script.sh.erb" ]] && chmod 755 "$dir/template/script.sh.erb"
 }
 
 generate_landing_page() {

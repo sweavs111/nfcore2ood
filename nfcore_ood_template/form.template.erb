@@ -16,13 +16,6 @@ attributes:
     step: 1
     help: Requested walltime for the launch job.
 
-  bc_email_on_started:
-    label: Email when job starts
-    widget: check_box
-    checked_value: 1
-    unchecked_value: 0
-    help: Send an email notification when the Open OnDemand launch job starts.
-
 __NEXTFLOW_VERSION_FIELD__
 
   workdir:
@@ -45,18 +38,11 @@ __NEXTFLOW_VERSION_FIELD__
     checked_value: 1
     unchecked_value: 0
     help: |
-      Launches with `-profile test` (plus the container/scheduler profile),
-      using the pipeline's official minimal test dataset instead of any
-      parameter fields below — those fields are **not** passed to Nextflow
-      when this is checked. Useful for verifying that this app launches the
-      pipeline correctly. Fields this form marks as required (e.g. Input)
-      still need a placeholder value to pass browser validation, but the
-      value itself is ignored.
-
-      The built-in test profile fetches its dataset from
-      raw.githubusercontent.com at runtime, so checking this box routes the
-      launch job to the `xfer` partition (the only one with outbound
-      internet).
+      Launches with `-profile test`,
+      using the pipeline's official minimal test dataset. Ignores all
+      arguments except **outdir**. Fields marked as required still need a
+      placeholder value (e.g. A space or any text). Useful for verifying that this
+      app launches the pipeline correctly. 
 
   resume:
     label: Resume previous run

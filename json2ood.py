@@ -38,7 +38,7 @@ STATIC_FORM_FIELDS = [
     "workdir",
     "use_test_profile",
 ]
-TRAILING_FORM_FIELDS = ["resume", "bc_email_on_started"]
+TRAILING_FORM_FIELDS = ["resume"]
 
 
 # Values that can appear in a JSON Schema ``default`` or ``enum``.

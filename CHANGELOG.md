@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- The "Email when job starts" checkbox (`bc_email_on_started`) and its
+  `submit.yml.erb` `email_on_started`/`email_on_terminated` wiring. This was
+  a passthrough to OOD/Slurm's own `--mail-user` notification, not an
+  nf-core pipeline option, and whether it actually delivered depended
+  entirely on the OOD host's user-email resolution and the cluster's mail
+  relay -- neither of which this repo controls or can guarantee.
+
 ### Added
 
 - Generated apps now surface pipeline success/failure inside the session

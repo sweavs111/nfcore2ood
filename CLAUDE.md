@@ -96,7 +96,7 @@ delegates that to two Python scripts:
 clear message if unset (`validate_environment`): `NF2OOD_PIPELINE_ROOT`,
 `NF2OOD_SINGULARITY_CACHEDIR`. `NF2OOD_SLURM_PROFILE` is **SOFT (warn)** —
 falls back to `default` with a one-shot warning. Every
-other `NF2OOD_*` var (`NF2OOD_CLUSTER`, `NF2OOD_DEFAULT_DIRECTORY`,
+other `NF2OOD_*` var nf2ood itself reads (`NF2OOD_CLUSTER`,
 `NF2OOD_MODULE_NAME`, `NF2OOD_CONTAINER_MODULE`, `NF2OOD_ENV_FILE`,
 `NF2OOD_CACHE_RESET_PATH`, `NF2OOD_APPS_URL_PREFIX`) is
 **SOFT** with a safe cross-site default via `config_value()`. Module name
@@ -105,6 +105,39 @@ string means "skip this `module load`" — see the comment in
 `nf2ood:customize_generated_app`. When adding a new site-configurable value,
 follow this same three-tier pattern and document it in both
 `nf2ood.env.example` and the README's Configuration reference table.
+
+`NF2OOD_DEFAULT_DIRECTORY` is the one exception: it is deliberately *not*
+read by `nf2ood`/`config_value()` at generation time, and setting it in
+`nf2ood.env` does nothing. The schema-derived `path_selector` fields
+(`json2ood.py:infer_widget_type`'s `path_selector` branch) emit a live ERB
+expression — `ENV.fetch('NF2OOD_DEFAULT_DIRECTORY', ENV.fetch('HOME', '/'))`
+— evaluated per-request inside the *viewing user's own* Open OnDemand PUN
+process. This was a deliberate fix: an earlier version baked
+`NF2OOD_DEFAULT_DIRECTORY` into `form.template.erb` via the usual
+`--set __TOKEN__=VALUE` substitution pass, which froze in whatever path
+expanded in the shell of whoever ran `nf2ood` (e.g. their own scratch dir
+via `$USER`) and then served that same literal path to every user of every
+generated app. If a site wants one shared default directory for all users
+instead of each user's own `$HOME`, export `NF2OOD_DEFAULT_DIRECTORY` in the
+environment Open OnDemand's Passenger/PUN processes run with — not in
+`nf2ood.env`.
+
+The static `workdir` field in `form.template.erb` (the Nextflow launch
+directory, distinct from a pipeline's own `--outdir`/`--input` parameters)
+goes one step further: if `NF2OOD_DEFAULT_DIRECTORY` isn't set in that
+process's environment, it falls back to the viewing user's own scratch
+directory (`/share/#{ENV['GROUP']}/#{ENV['USER']}`) rather than `$HOME`,
+falling back further to `$HOME` only if `GROUP` isn't present. `GROUP` is
+exported by `/etc/profile.d/hpc.sh` (`export GROUP=$(id -gn)`) for every
+Hazel login shell, the same mechanism that gives `HOME`/`USER`; this
+assumes Open OnDemand's PUN launch sources that same login-profile chain.
+`$HOME`'s 1 GB quota is too small for a real Nextflow work directory, and
+scratch is exactly where the handbook's own recommended workflow says job
+working directories belong -- at the cost of the 30-day scratch purge,
+which the field's help text calls out. This scratch fallback deliberately
+does *not* apply to the schema-derived `path_selector` fields above (e.g. a
+pipeline's `--outdir`), which still fall back to `$HOME` only, since those
+are user-chosen input/output locations rather than throwaway work dirs.
 
 The generated `template/script.sh.erb` re-sources `NF2OOD_ENV_FILE` **at job
 runtime** on the compute node (falling back to the `__TOKEN__` baked in at

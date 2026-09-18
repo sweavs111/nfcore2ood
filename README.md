@@ -165,12 +165,26 @@ warning:
 **SOFT** — `nf2ood` silently uses a safe cross-site default when unset:
 
 - `NF2OOD_CLUSTER` (default `cluster`): Open OnDemand cluster id written into `form.yml.erb`
-- `NF2OOD_DEFAULT_DIRECTORY` (default `$HOME`): default working directory shown in the app form
 - `NF2OOD_MODULE_NAME` (default `nextflow`, `""` to skip): name of the Nextflow environment module the generated job wrapper should `module load`. Set explicitly to `""` if your site installs Nextflow system-wide and there is no module to load.
 - `NF2OOD_CONTAINER_MODULE` (default `singularity`, `""` to skip): name of the container-engine environment module to `module load` at job runtime. Set explicitly to `""` for sites where Singularity / Apptainer is installed as an OS package rather than as an environment module. The runtime wrapper also auto-skips module loading entirely on compute nodes that have no `module` function at all.
 - `NF2OOD_ENV_FILE` (default empty): path that generated runtime scripts will try to source
 - `NF2OOD_CACHE_RESET_PATH` (default `/pun/sys/cache_reset`): base path of the [cache reset utility](#step-3-deploy-the-cache-reset-utility-one-time-per-ood-instance) that every generated app's "Saved form values" notice links to. Override while testing that utility itself (e.g. from a `/pun/dev/<user>/cache_reset` sandbox deploy) so the generated link matches wherever it's actually running.
 - `NF2OOD_APPS_URL_PREFIX` (default `/pun/sys/dashboard/apps/show`): base path the generated [landing page](#landing-page) links each pipeline card to. Override while testing (e.g. to a `/pun/dev/<user>` sandbox) so the links match wherever the apps actually live.
+
+`NF2OOD_DEFAULT_DIRECTORY` is not in the list above because `nf2ood` never
+reads it: the generated "Working directory" field looks it up itself, at
+form-render time, inside the *viewing user's own* Open OnDemand process.
+Setting it in `nf2ood.env` has no effect, since that file is only sourced by
+whoever runs `nf2ood` to generate apps, not by Open OnDemand. If unset there,
+it falls back to the viewing user's own scratch directory
+(`/share/$GROUP/$USER`, built from the `GROUP`/`USER`/`HOME` env vars a
+normal Hazel login shell already has), or to their `$HOME` if `GROUP` isn't
+present in that process's environment -- a Nextflow work directory routinely
+needs more than `$HOME`'s quota, and scratch is where job working
+directories belong, at the cost of the 30-day scratch purge (the field's
+help text says so). To give every user the same site-wide default directory
+instead, export `NF2OOD_DEFAULT_DIRECTORY` in the environment Open
+OnDemand's Passenger/PUN processes run with.
 
 Downloader defaults are derived from those settings:
 

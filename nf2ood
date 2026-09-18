@@ -365,7 +365,7 @@ customize_generated_app() {
 
   local pipeline_slug="${pipeline_name#nf-core-}"
   local app_slug version_path subcategory
-  local rendered_cluster rendered_default_directory rendered_module_name
+  local rendered_cluster rendered_module_name
   local rendered_pipeline_root rendered_singularity_cache rendered_slurm_profile
   local rendered_container_module rendered_env_file
   local rendered_custom_config_base rendered_cache_reset_path
@@ -383,7 +383,6 @@ customize_generated_app() {
 
   # Soft defaults that are reasonable cross-site values.
   rendered_cluster="$(config_value NF2OOD_CLUSTER "cluster")"
-  rendered_default_directory="$(config_value NF2OOD_DEFAULT_DIRECTORY "$HOME")"
   rendered_env_file="$(config_value NF2OOD_ENV_FILE "")"
 
   # Every nf-core pipeline's nextflow.config defaults custom_config_base to
@@ -430,7 +429,6 @@ customize_generated_app() {
     --set "__APP_SLUG__=${app_slug}"
     --set "__SUBCATEGORY__=${subcategory}"
     --set "__NF2OOD_CLUSTER__=${rendered_cluster}"
-    --set "__NF2OOD_DEFAULT_DIRECTORY__=${rendered_default_directory}"
     --set "__NF2OOD_MODULE_NAME__=${rendered_module_name}"
     --set "__NEXTFLOW_VERSION_FIELD__=${rendered_nextflow_version_field}"
     --set "__NF2OOD_FORCE_LEGACY_PARSER__=${rendered_force_legacy_parser}"

@@ -29,10 +29,15 @@ __NEXTFLOW_VERSION_FIELD__
     label: Working directory
     widget: path_selector
     required: false
-    directory: "__NF2OOD_DEFAULT_DIRECTORY__"
+    directory: "<%= ENV.fetch('NF2OOD_DEFAULT_DIRECTORY') { ENV.key?('GROUP') ? "/share/#{ENV['GROUP']}/#{ENV.fetch('USER', ENV.fetch('HOME', '/'))}" : ENV.fetch('HOME', '/') } %>"
     favorites:
-      - "__NF2OOD_DEFAULT_DIRECTORY__"
-    help: Directory where the Nextflow launch should run.
+      - "<%= ENV.fetch('NF2OOD_DEFAULT_DIRECTORY') { ENV.key?('GROUP') ? "/share/#{ENV['GROUP']}/#{ENV.fetch('USER', ENV.fetch('HOME', '/'))}" : ENV.fetch('HOME', '/') } %>"
+      - "<%= ENV.fetch('HOME', '/') %>"
+    help: |
+      Directory where the Nextflow launch should run (this is where
+      Nextflow's own `work/` intermediate files land, not your pipeline
+      output). Defaults to your scratch directory, which is purged after
+      30 days.
 
   use_test_profile:
     label: Run pipeline's built-in test profile

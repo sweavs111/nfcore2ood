@@ -51,6 +51,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The "Working directory" field on generated apps now resolves
+  `NF2OOD_DEFAULT_DIRECTORY` at form-render time inside each viewing user's
+  own Open OnDemand process, the same way schema-derived directory fields
+  already did, instead of being baked into `form.template.erb` once at
+  generation time from whatever `NF2OOD_DEFAULT_DIRECTORY` expanded to in
+  the operator's own shell (e.g. their personal scratch directory via
+  `$USER`) -- previously every user of every generated app saw the
+  operator's own directory as the default, not their own. When
+  `NF2OOD_DEFAULT_DIRECTORY` isn't set in that process's environment, it now
+  defaults to the viewing user's own scratch directory
+  (`/share/$GROUP/$USER`, using `GROUP`/`USER`/`HOME` the same way a normal
+  Hazel login shell would) rather than `$HOME`, since a Nextflow work
+  directory routinely needs far more than `$HOME`'s 1 GB quota -- falling
+  back to `$HOME` only if `GROUP` isn't present in that environment. The
+  field's help text now also calls out the 30-day scratch purge so users
+  know to copy results they want to keep to RS1.
 - Generated app directories, the landing page app, and the top-level
   `--output` directory are now normalized to `755` (dirs) / `644` (files)
   after generation, so every file is "other"-readable once the output tree

@@ -367,7 +367,7 @@ Each generated app directory includes:
 - `template/script.sh.erb`
 - `template/nf-params.json.erb`
 - `README.md`
-- app assets from the shared template such as `icon.png`, `LICENSE.txt`, and `CHANGELOG.md`
+- app assets from the shared template such as `icon.png` and `LICENSE.txt`
 
 ## Current generated behavior
 

@@ -182,7 +182,8 @@ fi
 
 nextflow_command+=("${resume_flag[@]}")
 
-printf 'Executing: %q ' "${nextflow_command[@]}"
+printf 'Executing:'
+printf ' %q' "${nextflow_command[@]}"
 printf '\n'
 
 # Append one pipe-delimited line per launch ("start") and per Nextflow exit

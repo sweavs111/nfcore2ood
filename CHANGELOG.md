@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with `-c` when the test checkbox is checked. Older `check_max()`-template
   pipelines (atacseq, chipseq) were already capped by `params.max_*` and are
   unaffected.
+- The `Executing:` line `script.sh.erb` prints to `output.log` no longer
+  repeats the `Executing:` prefix before every argument
+  (`printf 'Executing: %q '` reused the whole format per argument); it now
+  prints the prefix once, followed by the shell-quoted command.
 - The "Working directory" field on generated apps now resolves
   `NF2OOD_DEFAULT_DIRECTORY` at form-render time inside each viewing user's
   own Open OnDemand process, the same way schema-derived directory fields

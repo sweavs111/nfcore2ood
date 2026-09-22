@@ -127,6 +127,12 @@ workflow code, outside `conf/test.config` or the samplesheet entirely, so no
 amount of local URL-rewriting can guarantee catching everything a given
 pipeline version needs.
 
+When the checkbox is checked, the launch script also passes a small `-c`
+config that restores nf-core's test-sized `process.resourceLimits`
+(4 CPUs / 15 GB / 2 h). Otherwise the institutional profile's own
+`resourceLimits` (loaded after the pipeline's `test` profile) would replace
+the test cap, and tiny test tasks would request full-size Slurm allocations.
+
 Important:
 
 The downloader requires `NF2OOD_PIPELINE_ROOT` (or `--install-root`) to be

@@ -157,6 +157,26 @@ profile="${slurm_profile}"
 [[ "${use_test_profile}" == "1" ]] && profile="test,${profile}"
 nextflow_command+=("-profile" "${profile}")
 
+# nf-core's test profile caps every task via process.resourceLimits (4 CPUs
+# / 15 GB / 1 h in the current template; sarek uses 2 h). But each
+# pipeline's nextflow.config includes nfcore_custom.config *after* its
+# profiles block, and institutional configs (hazel.config included) set
+# process.resourceLimits unconditionally -- so under `-profile test,<site>`
+# the site's full-size ceiling replaces the test cap, and tiny test tasks
+# request e.g. process_high's 12 CPUs / 72 GB / 16 h and sit pending for a
+# large free slot. `-c` configs merge after the pipeline's own config, so
+# re-apply the test cap here. 2 h covers sarek's longer test limit; older
+# check_max()-template pipelines (params.max_*) are already capped lower by
+# their own test profile and are unaffected.
+if [[ "${use_test_profile}" == "1" ]]; then
+  cat > test_resource_limits.config <<'EOF'
+process {
+    resourceLimits = [cpus: 4, memory: '15.GB', time: '2.h']
+}
+EOF
+  nextflow_command+=("-c" "test_resource_limits.config")
+fi
+
 nextflow_command+=("${resume_flag[@]}")
 
 printf 'Executing: %q ' "${nextflow_command[@]}"

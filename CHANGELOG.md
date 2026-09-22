@@ -60,6 +60,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Built-in test profile runs now keep nf-core's test-sized resource cap.
+  Each pipeline includes `nfcore_custom.config` after its profiles block,
+  and institutional configs (including `hazel.config`) set
+  `process.resourceLimits` unconditionally, so under `-profile test,<site>`
+  the site ceiling (24 CPUs / 128 GB / 5 d on Hazel) replaced the test
+  profile's 4 CPUs / 15 GB / 1 h cap. Tiny test tasks then requested full
+  `process_high` resources (12 CPUs / 72 GB / 16 h) and sat pending.
+  `script.sh.erb` now writes a small `test_resource_limits.config`
+  (`cpus: 4, memory: '15.GB', time: '2.h'`; 2 h covers sarek) and passes it
+  with `-c` when the test checkbox is checked. Older `check_max()`-template
+  pipelines (atacseq, chipseq) were already capped by `params.max_*` and are
+  unaffected.
 - The "Working directory" field on generated apps now resolves
   `NF2OOD_DEFAULT_DIRECTORY` at form-render time inside each viewing user's
   own Open OnDemand process, the same way schema-derived directory fields

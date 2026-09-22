@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Optional pipeline usage logging via a new soft `NF2OOD_USAGE_LOG`
+  setting (default empty = disabled). When set, `script.sh.erb` appends a
+  `start` line before `nextflow run` and an `end` line with Nextflow's exit
+  code afterward, as `timestamp|user|group|pipeline|version|slurm_job_id|
+  event|test|resume|exit`. It follows the same append-only-log convention
+  as the BRC module-load log. Write failures are ignored, so a missing or
+  unwritable log never fails a run.
 - Generated apps now surface pipeline success/failure inside the session
   card once a run finishes. `script.sh.erb` captures Nextflow's real exit
   code (working around `set -euo pipefail`) and writes a `pipeline_status`

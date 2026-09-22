@@ -39,6 +39,9 @@ container_module="${NF2OOD_CONTAINER_MODULE-__NF2OOD_CONTAINER_MODULE__}"
 pipeline_root="${NF2OOD_PIPELINE_ROOT:-__NF2OOD_PIPELINE_ROOT__}"
 singularity_cache="${NF2OOD_SINGULARITY_CACHEDIR:-__NF2OOD_SINGULARITY_CACHEDIR__}"
 slurm_profile="${NF2OOD_SLURM_PROFILE:-__NF2OOD_SLURM_PROFILE__}"
+# ${var-default} (no colon), same as the module names above: an explicit
+# empty NF2OOD_USAGE_LOG in the env file disables usage logging.
+usage_log="${NF2OOD_USAGE_LOG-__NF2OOD_USAGE_LOG__}"
 nextflow_version="<%= context.nextflow_version.to_s.strip %>"
 
 if [[ $(type -t module || true) == "function" ]]; then
@@ -182,6 +185,34 @@ nextflow_command+=("${resume_flag[@]}")
 printf 'Executing: %q ' "${nextflow_command[@]}"
 printf '\n'
 
+# Append one pipe-delimited line per launch ("start") and per Nextflow exit
+# ("end") to a site-wide usage log, if NF2OOD_USAGE_LOG is set. Fixed
+# columns so the log can be sliced with `cut -d '|' -f N`:
+#   timestamp|user|group|pipeline|version|slurm_job_id|event|test|resume|exit
+# (exit is "-" on start lines.) Jobs killed by walltime or scancel never
+# reach the end line -- join on slurm_job_id against sacct for those. The
+# log is expected to be append-only for users (e.g. file 622 in a 711
+# directory), so any failure to write is silently ignored: a missing or
+# unwritable log must never fail a user's run.
+log_usage() {
+  [[ -n "${usage_log}" ]] || return 0
+  {
+    printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "${USER:-$(id -un)}" \
+      "${GROUP:-$(id -gn)}" \
+      "__PIPELINE_NAME__" \
+      "__PIPELINE_VERSION__" \
+      "${SLURM_JOB_ID:-}" \
+      "$1" \
+      "${use_test_profile}" \
+      "<%= context.resume %>" \
+      "$2" >> "${usage_log}"
+  } 2>/dev/null || true
+}
+
+log_usage start -
+
 # The session card's own status pill only ever reads "Completed" -- OodCore's
 # job status model has no separate failed/error state, so Slurm FAILED,
 # CANCELLED, etc. all collapse into it. Capture Nextflow's real exit code
@@ -193,6 +224,8 @@ set +e
 "${nextflow_command[@]}"
 nextflow_exit_code=$?
 set -e
+
+log_usage end "${nextflow_exit_code}"
 
 if [[ ${nextflow_exit_code} -eq 0 ]]; then
   echo "SUCCESS" > "${staged_root}/pipeline_status"

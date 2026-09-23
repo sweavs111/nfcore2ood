@@ -9,7 +9,10 @@ script:
   job_name: "OnDemand/__PIPELINE_NAME__"
   native:
     - "--time"
-    - "<%= bc_num_hours %>:00:00"
+    # Clamp to the site's max walltime (NF2OOD_MAX_HOURS) even if the form's
+    # max: was bypassed (e.g. a stale cached value), so sbatch isn't rejected
+    # by a DenyOnLimit QOS.
+    - "<%= bc_num_hours.to_i.clamp(1, __NF2OOD_MAX_HOURS__) %>:00:00"
     - "--nodes"
     - "1"
     <%- if use_test_profile.to_s == "1" -%>

@@ -402,6 +402,12 @@ customize_generated_app() {
   # to. Empty (the default) disables usage logging entirely.
   rendered_usage_log="$(config_value NF2OOD_USAGE_LOG "")"
 
+  # Upper bound for the "Number of hours" field, enforced both in the form
+  # (max:) and in submit.yml.erb (clamped before it reaches --time).
+  # Default matches Hazel's normal/xfer QOS MaxWall of 4 days.
+  rendered_max_hours="$(config_value NF2OOD_MAX_HOURS "96")"
+  [[ "$rendered_max_hours" =~ ^[1-9][0-9]*$ ]] || die "NF2OOD_MAX_HOURS must be a positive integer (got '${rendered_max_hours}')."
+
   # Module names use ${var-default} (no colon) so that an explicit empty
   # value in nf2ood.env means "do not load a module for this slot". Sites
   # that install nextflow / singularity / apptainer system-wide (no module
@@ -444,6 +450,7 @@ customize_generated_app() {
     --set "__NF2OOD_CUSTOM_CONFIG_BASE__=${rendered_custom_config_base}"
     --set "__NF2OOD_CACHE_RESET_PATH__=${rendered_cache_reset_path}"
     --set "__NF2OOD_USAGE_LOG__=${rendered_usage_log}"
+    --set "__NF2OOD_MAX_HOURS__=${rendered_max_hours}"
   )
 
   python3 "$REPO_ROOT/customize_app.py" "$app_dir" "${customize_args[@]}"

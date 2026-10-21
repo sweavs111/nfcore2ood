@@ -80,15 +80,15 @@ fi
 # nextflow.io with no timeout) hangs until the OS-level TCP timeout gives
 # up -- stalling the run before it even starts. Disable it unconditionally;
 # version checks belong on the login node / in module updates, not in
-# every batch job.
-export NXF_DISABLE_CHECK_LATEST=1
-
-# NXF_DISABLE_CHECK_LATEST above only silences the JVM-level upgrade nudge.
-# The `nextflow` launcher script itself does a *separate* plain `curl` to
-# www.nextflow.io as part of its own version check before the JVM even
-# starts, and that one isn't gated by NXF_DISABLE_CHECK_LATEST -- observed
+# every batch job. Must be the literal string "true": the `nextflow`
+# launcher script's own pre-JVM version check (a separate plain curl to
+# www.nextflow.io) tests `$NXF_DISABLE_CHECK_LATEST == true`, so "1" only
+# silenced the JVM-level nudge and left the launcher curl running -- observed
 # hanging for the full ~2min TCP connect timeout on a no-internet compute
-# node before Nextflow proceeded on its own. NXF_OFFLINE also covers plugin
+# node before Nextflow proceeded on its own.
+export NXF_DISABLE_CHECK_LATEST=true
+
+# NXF_OFFLINE also skips the launcher check, and covers plugin
 # registry/index lookups, so set it too: everything this app needs (pipeline
 # code, containers, plugins, custom_config_base) is already staged locally,
 # so Nextflow should never need to reach out at all -- except when the

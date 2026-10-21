@@ -68,6 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `script.sh.erb` set `NXF_DISABLE_CHECK_LATEST=1`, but the `nextflow`
+  launcher script's own pre-JVM version check only skips when the value is
+  the literal string `true`, so it still curled nextflow.io on every launch
+  (visible as "Nextflow X is available" in output.log, and a ~2 min hang on
+  no-internet nodes when NXF_OFFLINE isn't set, e.g. test-profile runs).
+  Now set to `true`.
 - Built-in test profile runs now keep nf-core's test-sized resource cap.
   Each pipeline includes `nfcore_custom.config` after its profiles block,
   and institutional configs (including `hazel.config`) set

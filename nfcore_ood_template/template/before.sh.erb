@@ -7,9 +7,14 @@ export host="$(hostname)"
 # Hardcode port since the variable is needed but the information isn't.
 export port=1234
 
+# Blank field (e.g. a cached empty value from an older form): fall back to
+# the user's scratch dir, same as the form's default -- keep in sync with
+# script.sh.erb. `id -gn "$USER"` reads the passwd primary group; plain
+# `id -gn` gives the job's own gid, which under OOD isn't the scratch group.
 WORKING_DIR="<%= context.workdir %>"
 if [[ -z "${WORKING_DIR// }" ]]; then
-  WORKING_DIR="${HOME}"
+  WORKING_DIR="/share/$(id -gn "${USER:-$(id -un)}" 2>/dev/null)/${USER:-$(id -un)}"
+  [[ -d "${WORKING_DIR}" && -w "${WORKING_DIR}" ]] || WORKING_DIR="${HOME}"
 fi
 
 export working_path="$WORKING_DIR"

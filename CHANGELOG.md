@@ -94,6 +94,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The "Working directory" field's scratch default never took effect, so
+  Nextflow's `work/` landed in `$HOME` (1 GB quota). Three causes: the form
+  only set the `path_selector`'s `directory:` (where the file browser
+  opens), not its `value:`, so an untouched field submitted ""; the job
+  scripts' blank-field fallback was `$HOME`; and the scratch path was built
+  from `ENV['GROUP']`, which the OOD PUN (not a login shell, gid `ncsu`)
+  doesn't have. The form now pre-fills `value:` with
+  `/share/<primary group>/$USER`, reading the group from the user's passwd
+  entry, and `script.sh.erb` / `before.sh.erb` fall back to the same
+  directory (via `id -gn "$USER"`) when the field is still blank, e.g. an
+  empty value restored from OOD's form cache. `$HOME` remains the last
+  resort when that directory doesn't exist.
 - nf-core/viralrecon 3.0.0 apps failed at launch with `Invalid include
   source: '.../conf/test_full_sispa.config'`: the release's `nextflow.config`
   defines a `test_full_sispa` profile whose config file was never shipped,

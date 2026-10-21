@@ -19,13 +19,34 @@ attributes:
 
 __NEXTFLOW_VERSION_FIELD__
 
+<%
+  # Default working directory: NF2OOD_DEFAULT_DIRECTORY if the PUN has it,
+  # else the viewing user's scratch dir, else $HOME. The scratch group comes
+  # from the user's passwd entry, not ENV['GROUP']: the PUN isn't a login
+  # shell (no /etc/profile.d/hpc.sh) and runs with a different gid (ncsu),
+  # so neither GROUP nor the process gid names the /share/<group> dir.
+  require "etc"
+  nf2ood_default_workdir = ENV.fetch("NF2OOD_DEFAULT_DIRECTORY") do
+    home = ENV.fetch("HOME", "/")
+    begin
+      pw = Etc.getpwnam(ENV.fetch("USER") { Etc.getpwuid.name })
+      scratch = "/share/#{Etc.getgrgid(pw.gid).name}/#{pw.name}"
+      File.directory?(scratch) ? scratch : home
+    rescue StandardError
+      home
+    end
+  end
+%>
   workdir:
     label: Working directory
     widget: path_selector
     required: false
-    directory: "<%= ENV.fetch('NF2OOD_DEFAULT_DIRECTORY') { ENV.key?('GROUP') ? "/share/#{ENV['GROUP']}/#{ENV.fetch('USER', ENV.fetch('HOME', '/'))}" : ENV.fetch('HOME', '/') } %>"
+    # value: pre-fills the field; directory: only sets where the file
+    # browser opens, so without value: an untouched field submits "".
+    value: "<%= nf2ood_default_workdir %>"
+    directory: "<%= nf2ood_default_workdir %>"
     favorites:
-      - "<%= ENV.fetch('NF2OOD_DEFAULT_DIRECTORY') { ENV.key?('GROUP') ? "/share/#{ENV['GROUP']}/#{ENV.fetch('USER', ENV.fetch('HOME', '/'))}" : ENV.fetch('HOME', '/') } %>"
+      - "<%= nf2ood_default_workdir %>"
       - "<%= ENV.fetch('HOME', '/') %>"
     help: |
       Directory where the Nextflow launch should run (this is where

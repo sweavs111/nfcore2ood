@@ -186,9 +186,11 @@ form-render time, inside the *viewing user's own* Open OnDemand process.
 Setting it in `nf2ood.env` has no effect, since that file is only sourced by
 whoever runs `nf2ood` to generate apps, not by Open OnDemand. If unset there,
 it falls back to the viewing user's own scratch directory
-(`/share/$GROUP/$USER`, built from the `GROUP`/`USER`/`HOME` env vars a
-normal Hazel login shell already has), or to their `$HOME` if `GROUP` isn't
-present in that process's environment -- a Nextflow work directory routinely
+(`/share/<primary group>/$USER`, with the group read from the user's passwd
+entry, since the OOD process has no login-shell `GROUP` and runs under a
+different gid), or to their `$HOME` if that directory doesn't exist. The
+job script applies the same fallback if the field still arrives blank
+(e.g. an empty value restored from the form cache) -- a Nextflow work directory routinely
 needs more than `$HOME`'s quota, and scratch is where job working
 directories belong, at the cost of the 30-day scratch purge (the field's
 help text says so). To give every user the same site-wide default directory

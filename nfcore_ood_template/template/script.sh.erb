@@ -6,9 +6,15 @@ set -euo pipefail
 # from a non-login shell.
 [[ $(type -t module || true) == "function" ]] && export -f module
 
+# Blank field (e.g. a cached empty value from an older form): fall back to
+# the user's scratch dir rather than $HOME, whose 1 GB quota a Nextflow
+# work/ dir quickly overruns. Keep in sync with before.sh.erb and the form's
+# default. `id -gn "$USER"` reads the passwd primary group; plain `id -gn`
+# gives the job's own gid, which under OOD isn't the scratch group.
 workdir="<%= context.workdir %>"
 if [[ -z "${workdir// }" ]]; then
-  workdir="${HOME}"
+  workdir="/share/$(id -gn "${USER:-$(id -un)}" 2>/dev/null)/${USER:-$(id -un)}"
+  [[ -d "${workdir}" && -w "${workdir}" ]] || workdir="${HOME}"
 fi
 
 # Captured before cd'ing into $workdir below -- this is the batch_connect

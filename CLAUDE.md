@@ -126,11 +126,19 @@ The static `workdir` field in `form.template.erb` (the Nextflow launch
 directory, distinct from a pipeline's own `--outdir`/`--input` parameters)
 goes one step further: if `NF2OOD_DEFAULT_DIRECTORY` isn't set in that
 process's environment, it falls back to the viewing user's own scratch
-directory (`/share/#{ENV['GROUP']}/#{ENV['USER']}`) rather than `$HOME`,
-falling back further to `$HOME` only if `GROUP` isn't present. `GROUP` is
-exported by `/etc/profile.d/hpc.sh` (`export GROUP=$(id -gn)`) for every
-Hazel login shell, the same mechanism that gives `HOME`/`USER`; this
-assumes Open OnDemand's PUN launch sources that same login-profile chain.
+directory (`/share/<primary group>/<user>`) rather than `$HOME`, falling
+back further to `$HOME` only if that directory doesn't exist. The group is
+looked up from the user's passwd entry (`Etc.getpwnam` in the form, `id -gn
+"$USER"` at runtime), *not* from `ENV['GROUP']` or the process gid: the PUN
+isn't a login shell, so `/etc/profile.d/hpc.sh`'s `GROUP` export is absent,
+and both the PUN and the OOD-launched job run with gid `ncsu` rather than
+the user's primary group (`brc`), so plain `id -gn` names the wrong
+`/share` dir. The form sets the field's `value:` (not just `directory:`,
+which only picks where the file browser opens -- without `value:` an
+untouched field submits ""), and `template/script.sh.erb` /
+`template/before.sh.erb` apply the same scratch fallback when the field
+still arrives blank (e.g. an empty value restored from OOD's form cache).
+Keep all three in sync.
 `$HOME`'s 1 GB quota is too small for a real Nextflow work directory, and
 scratch is exactly where the handbook's own recommended workflow says job
 working directories belong -- at the cost of the 30-day scratch purge,

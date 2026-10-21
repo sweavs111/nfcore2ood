@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setting (default empty = disabled). When set, `script.sh.erb` appends a
   `start` line before `nextflow run` and an `end` line with Nextflow's exit
   code afterward, as `timestamp|user|group|pipeline|version|slurm_job_id|
-  event|test|resume|exit`. It follows the same append-only-log convention
+  event|test|resume|exit`, with `timestamp` in Eastern local time plus
+  its UTC offset (e.g. `2026-09-28T13:45:30-04:00`). It follows the same append-only-log convention
   as the BRC module-load log. Write failures are ignored, so a missing or
   unwritable log never fails a run.
 - Generated apps now surface pipeline success/failure inside the session

@@ -199,7 +199,7 @@ log_usage() {
   [[ -n "${usage_log}" ]] || return 0
   {
     printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
-      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "$(TZ=America/New_York date +%Y-%m-%dT%H:%M:%S%:z)" \
       "${USER:-$(id -un)}" \
       "${GROUP:-$(id -gn)}" \
       "__PIPELINE_NAME__" \

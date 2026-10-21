@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Optional shared, pre-installed Nextflow plugin directory
+  (`NF2OOD_PLUGINS_DIR`, default empty = per-user `$NXF_HOME/plugins`).
+  `script.sh.erb` exports it as `NXF_PLUGINS_DIR`, so `NXF_OFFLINE=true`
+  runs work for users who have never run Nextflow, and a half-extracted
+  per-user plugin copy (e.g. `Class definition not found:
+  nextflow/validation/ValidationObserver`) can no longer break a run. New
+  `install_nextflow_plugins.sh` fills it with every plugin the staged
+  pipelines declare (plus implicit core plugins such as nf-amazon),
+  installing into a staging dir and smoke-testing each plugin offline
+  before moving it into place; `--check` re-tests the installed set.
+  Offline Nextflow refuses unpinned plugin ids, so the script warns about
+  any pipeline whose `plugins {}` block omits a version.
 - Optional pipeline usage logging via a new soft `NF2OOD_USAGE_LOG`
   setting (default empty = disabled). When set, `script.sh.erb` appends a
   `start` line before `nextflow run` and an `end` line with Nextflow's exit

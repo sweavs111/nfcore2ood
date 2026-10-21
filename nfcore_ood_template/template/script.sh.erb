@@ -60,6 +60,21 @@ fi
 
 export NXF_SINGULARITY_CACHEDIR="${singularity_cache}"
 
+# Load Nextflow plugins (nf-schema, nf-validation, ...) from a shared,
+# pre-installed directory instead of each user's own $NXF_HOME/plugins.
+# With NXF_OFFLINE=true (set below) Nextflow can't download a missing plugin,
+# so a first-time user with an empty NXF_HOME would otherwise fail on a
+# compute node -- and a half-extracted per-user copy fails with errors like
+# "Class definition not found: nextflow/validation/ValidationObserver".
+# Populate the dir with install_nextflow_plugins.sh. Scoped to these apps on
+# purpose: the dir only carries what the staged pipelines declare, so it is
+# not set in the nextflow modulefile for general CLI use. ${var-default}
+# (no colon): an explicit empty NF2OOD_PLUGINS_DIR in the env file disables it.
+plugins_dir="${NF2OOD_PLUGINS_DIR-__NF2OOD_PLUGINS_DIR__}"
+if [[ -n "${plugins_dir}" ]]; then
+  export NXF_PLUGINS_DIR="${plugins_dir}"
+fi
+
 # This pipeline version's nextflow.config (or an included conf/*.config)
 # defines a legacy top-level Groovy function -- almost always check_max(),
 # the pre-2023 nf-core template's way of clamping resource requests to

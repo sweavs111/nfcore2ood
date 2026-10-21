@@ -402,6 +402,10 @@ customize_generated_app() {
   # to. Empty (the default) disables usage logging entirely.
   rendered_usage_log="$(config_value NF2OOD_USAGE_LOG "")"
 
+  # Shared pre-installed Nextflow plugin dir (see install_nextflow_plugins.sh).
+  # Empty (the default) leaves plugins in each user's own NXF_HOME.
+  rendered_plugins_dir="$(config_value NF2OOD_PLUGINS_DIR "")"
+
   # Upper bound for the "Number of hours" field, enforced both in the form
   # (max:) and in submit.yml.erb (clamped before it reaches --time).
   # Default matches Hazel's normal/xfer QOS MaxWall of 4 days.
@@ -450,6 +454,7 @@ customize_generated_app() {
     --set "__NF2OOD_CUSTOM_CONFIG_BASE__=${rendered_custom_config_base}"
     --set "__NF2OOD_CACHE_RESET_PATH__=${rendered_cache_reset_path}"
     --set "__NF2OOD_USAGE_LOG__=${rendered_usage_log}"
+    --set "__NF2OOD_PLUGINS_DIR__=${rendered_plugins_dir}"
     --set "__NF2OOD_MAX_HOURS__=${rendered_max_hours}"
   )
 

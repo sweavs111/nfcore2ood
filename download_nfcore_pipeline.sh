@@ -25,9 +25,13 @@ Usage: $(basename "$0") --name PIPELINE --revision VERSION [options]
 Options:
   -n, --name PIPELINE         nf-core pipeline name without the nf-core- prefix
   -r, --revision VERSION      nf-core pipeline revision
-      --install-root PATH     Base install root
+      --install-root PATH     Legacy single-tree layout: download into
+                               PATH/pipelines and use PATH/configs
+                               (default: NF2OOD_PIPELINE_ROOT and
+                               NF2OOD_CUSTOM_CONFIG_BASE from nf2ood.env)
       --configs-dir PATH      Central configs directory to symlink
                                Maintain configs once here for all pipelines
+                               (default: NF2OOD_CUSTOM_CONFIG_BASE)
       --container-engine NAME Container engine for nf-core download
       --engine-module NAME    Module name for the container engine
       --nfcore-module NAME    Module name for nf-core
@@ -84,23 +88,31 @@ if [[ -z "${pipeline_name}" || -z "${revision}" ]]; then
   exit 1
 fi
 
-# install_root defaults to the parent of NF2OOD_PIPELINE_ROOT when not set
-# via --install-root. NF2OOD_PIPELINE_ROOT is required (no Tufts-flavored
-# fallback) so misconfigured sites fail fast with a clear message.
-if [[ -z "${install_root}" ]]; then
-  if [[ -z "${NF2OOD_PIPELINE_ROOT:-}" ]]; then
-    echo "Error: NF2OOD_PIPELINE_ROOT is not set and --install-root was not given." >&2
-    echo "       Run 'source ./nf2ood.env' (after 'cp nf2ood.env.example nf2ood.env')." >&2
-    exit 1
-  fi
-  install_root="$(dirname "${NF2OOD_PIPELINE_ROOT}")"
+# Every path comes straight from its own nf2ood.env variable rather than being
+# guessed as a sibling of NF2OOD_PIPELINE_ROOT, so pipelines, configs and the
+# container cache can live on different filesystems (e.g. pipelines under
+# /usr/local/usrapps while configs and containers stay on /gpfs_backup).
+# NF2OOD_PIPELINE_ROOT is required (no Tufts-flavored fallback) so
+# misconfigured sites fail fast with a clear message. --install-root keeps
+# the old single-tree layout (<root>/pipelines, <root>/configs) available.
+if [[ -n "${install_root}" ]]; then
+  pipeline_root="${install_root}/pipelines"
+elif [[ -n "${NF2OOD_PIPELINE_ROOT:-}" ]]; then
+  pipeline_root="${NF2OOD_PIPELINE_ROOT}"
+else
+  echo "Error: NF2OOD_PIPELINE_ROOT is not set and --install-root was not given." >&2
+  echo "       Run 'source ./nf2ood.env' (after 'cp nf2ood.env.example nf2ood.env')." >&2
+  exit 1
 fi
 
-# Configs are maintained centrally under <install_root>/configs.
+# Configs are maintained centrally in one place -- by default the same local
+# nf-core/configs checkout the generated apps pass as --custom_config_base.
 # Each downloaded pipeline replaces its local configs directory with a symlink
 # to that shared copy so site updates only need to happen in one place.
-if [[ -z "${configs_dir}" ]]; then
-  configs_dir="${install_root}/configs"
+# NF2OOD_CUSTOM_CONFIG_BASE may be a URL on sites without a local mirror;
+# there is nothing to symlink then.
+if [[ -z "${configs_dir}" && "${NF2OOD_CUSTOM_CONFIG_BASE:-}" == /* ]]; then
+  configs_dir="${NF2OOD_CUSTOM_CONFIG_BASE}"
 fi
 
 if command -v module >/dev/null 2>&1; then
@@ -120,11 +132,9 @@ if ! command -v nf-core >/dev/null 2>&1; then
   exit 1
 fi
 
-pipeline_dir="${install_root}/pipelines/nf-core-${pipeline_name}"
+pipeline_dir="${pipeline_root}/nf-core-${pipeline_name}"
 version_dir="${pipeline_dir}/${revision}"
-cache_dir="${install_root}/singularity-images"
 
-#export NXF_SINGULARITY_CACHEDIR="${cache_dir}"
 export NXF_SINGULARITY_CACHEDIR="$NF2OOD_SINGULARITY_CACHEDIR"
 
 # Sites that run `nf-core` via a Singularity/Apptainer wrapper (e.g. an
@@ -134,7 +144,7 @@ export NXF_SINGULARITY_CACHEDIR="$NF2OOD_SINGULARITY_CACHEDIR"
 # container whenever it isn't a descendant of pipeline_dir, which is where
 # we `cd` to below. Explicitly bind both trees so nf-core can write to
 # either, without clobbering any bind path the site/user already set.
-bind_paths="${install_root}"
+bind_paths="${pipeline_root}"
 if [[ -n "${NF2OOD_SINGULARITY_CACHEDIR:-}" ]]; then
   bind_paths="${bind_paths},${NF2OOD_SINGULARITY_CACHEDIR}"
 fi
@@ -179,11 +189,10 @@ if [[ -d "${configs_dir}" ]]; then
   echo "Using central configs from ${configs_dir}"
   rm -rf configs
   ln -s "${configs_dir}" configs
+elif [[ -n "${configs_dir}" ]]; then
+  echo "Warning: configs directory ${configs_dir} not found; leaving the pipeline's own configs in place." >&2
 fi
 
 chmod -R 775 "${version_dir}"
-if [[ -d "${cache_dir}" ]]; then
-  chmod -R 775 "${cache_dir}"
-fi
 
 echo "Done"

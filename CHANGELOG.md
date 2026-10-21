@@ -78,6 +78,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   override it (e.g. to `/pun/dev/<user>`) while testing apps that haven't
   been deployed to `apps/sys` yet.
 
+### Changed
+
+- `download_nfcore_pipeline.sh` now takes each path from its own
+  `nf2ood.env` variable instead of deriving an install root as the parent
+  of `NF2OOD_PIPELINE_ROOT`: pipelines download into `NF2OOD_PIPELINE_ROOT`
+  directly, the central configs symlink defaults to
+  `NF2OOD_CUSTOM_CONFIG_BASE` (when it is a local path), and the container
+  bind paths are `NF2OOD_PIPELINE_ROOT` + `NF2OOD_SINGULARITY_CACHEDIR`.
+  Pipelines, configs and the container cache can now live on different
+  filesystems. A configured configs dir that doesn't exist now warns
+  instead of being skipped silently. `--install-root` keeps the old
+  single-tree layout. Dropped the `chmod -R` of
+  `<install-root>/singularity-images`, a dir neither layout creates.
+
 ### Fixed
 
 - `script.sh.erb` set `NXF_DISABLE_CHECK_LATEST=1`, but the `nextflow`

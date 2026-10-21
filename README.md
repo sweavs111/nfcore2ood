@@ -102,8 +102,9 @@ The script currently:
 - replaces the per-pipeline `configs` directory with a symlink to the shared central copy
 - allows site overrides through CLI flags while using defaults from `nf2ood.env`
 
-Configs are maintained centrally under the shared nf-core install root, usually
-`<install-root>/configs`. The downloader removes the downloaded local `configs`
+Configs are maintained centrally in one local nf-core/configs checkout -- by
+default `NF2OOD_CUSTOM_CONFIG_BASE`, the same directory the generated apps pass
+as `--custom_config_base`. The downloader removes the downloaded local `configs`
 directory and points each pipeline to that shared copy instead. This means you
 update configs once in the central location and all downloaded pipelines use
 the same maintained set.
@@ -196,9 +197,13 @@ OnDemand's Passenger/PUN processes run with.
 
 Downloader defaults are derived from those settings:
 
-- install root defaults to the parent directory of `NF2OOD_PIPELINE_ROOT`
-  (the downloader also accepts `--install-root` to override)
-- configs dir defaults to `<install-root>/configs`
+- pipelines download into `NF2OOD_PIPELINE_ROOT/nf-core-<name>/<version>`
+- configs dir defaults to `NF2OOD_CUSTOM_CONFIG_BASE` when it is a local path
+  (override with `--configs-dir`)
+- each path comes from its own variable, so pipelines, configs and the
+  container cache (`NF2OOD_SINGULARITY_CACHEDIR`) can live on different
+  filesystems; `--install-root PATH` restores the old single-tree layout
+  (`PATH/pipelines`, `PATH/configs`)
 - container engine defaults to `NF2OOD_CONTAINER_MODULE`
 
 `download_nfcore_pipeline.sh` also reads a few downloader-only variables

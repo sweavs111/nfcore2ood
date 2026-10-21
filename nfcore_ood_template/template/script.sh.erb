@@ -83,6 +83,11 @@ fi
 # pipeline even starts:
 #   ConfigParseException: Unexpected input: '(' @ line N, column N.
 #      def check_max(obj, type) {
+# The same applies when nextflow.config includeConfig's a file missing from
+# the release: v2 resolves every include up front, even inside profiles that
+# are never selected (nf-core/viralrecon 3.0.0's test_full_sispa profile ->
+# missing conf/test_full_sispa.config), while v1 only reads a profile's
+# includes when it's selected.
 # Detected once at app-generation time (see config_needs_legacy_parser in
 # nf2ood); baked in here so it applies regardless of which Nextflow module
 # version gets loaded above.

@@ -201,10 +201,13 @@ locate_schema() {
 }
 
 config_needs_legacy_parser() {
-  # Detect a legacy top-level Groovy function/closure definition (e.g.
-  # `def check_max(obj, type) { ... }`) in a pipeline's nextflow.config or
-  # any config it includeConfig's (one level deep -- covers the common
-  # nf-core layout of conf/base.config defining check_max()).
+  # Decide whether a pipeline's config only parses under Nextflow's legacy
+  # (v1) config parser. Returns 0 and echoes the reason if so. Two cases:
+  #
+  # 1. A legacy top-level Groovy function/closure definition (e.g.
+  #    `def check_max(obj, type) { ... }`) in nextflow.config or any config
+  #    it includeConfig's (one level deep -- covers the common nf-core
+  #    layout of conf/base.config defining check_max()).
   #
   # nf-core pipeline templates up through mid-2023 defined check_max() this
   # way to clamp resource requests to params.max_memory/max_time/max_cpus.
@@ -214,6 +217,15 @@ config_needs_legacy_parser() {
   #   ConfigParseException: Unexpected input: '(' @ line N, column N.
   #      def check_max(obj, type) {
   #                   ^
+  #
+  # 2. A literal includeConfig target that doesn't exist in the release.
+  #    v2 resolves every includeConfig up front, including ones inside
+  #    profiles that are never selected, so the whole run fails:
+  #      Error nextflow.config:252:26: Invalid include source: '.../conf/test_full_sispa.config'
+  #    (nf-core/viralrecon 3.0.0 ships a test_full_sispa profile whose
+  #    config file is missing.) v1 only reads a profile's includes when that
+  #    profile is selected, so the dangling one is harmless there.
+  #
   # Nextflow still ships the old parser; NXF_SYNTAX_PARSER=v1 selects it.
   local schema_path=$1
   local pipeline_dir
@@ -221,17 +233,33 @@ config_needs_legacy_parser() {
   local main_config="${pipeline_dir}/nextflow.config"
   [[ -f "$main_config" ]] || return 1
 
-  local -a configs=("$main_config")
+  local -a configs=("$main_config") missing=()
   local included resolved
   while IFS= read -r included; do
     [[ -n "$included" ]] || continue
+    # Interpolated targets (e.g. "${params.custom_config_base}/nfcore_custom.config")
+    # only resolve at run time; nothing to check here.
+    [[ "$included" == *'$'* ]] && continue
     resolved="${pipeline_dir}/${included}"
-    [[ -f "$resolved" ]] && configs+=("$resolved")
+    if [[ -f "$resolved" ]]; then
+      configs+=("$resolved")
+    else
+      missing+=("$included")
+    fi
   done < <(grep -ohE "includeConfig +['\"][^'\"]+['\"]" "$main_config" 2>/dev/null \
              | sed -E "s/includeConfig +['\"]([^'\"]+)['\"]/\1/")
 
-  grep -lE '^[[:space:]]*def[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(' \
-    "${configs[@]}" >/dev/null 2>&1
+  if ((${#missing[@]} > 0)); then
+    echo "includes a config file missing from the release (${missing[*]})"
+    return 0
+  fi
+
+  if grep -lE '^[[:space:]]*def[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(' \
+       "${configs[@]}" >/dev/null 2>&1; then
+    echo "defines a legacy config function (e.g. check_max())"
+    return 0
+  fi
+  return 1
 }
 
 lookup_tsv_value() {
@@ -424,10 +452,10 @@ customize_generated_app() {
   local rendered_nextflow_version_field
   rendered_nextflow_version_field="$(render_nextflow_version_field "$rendered_module_name")"
 
-  local rendered_force_legacy_parser="false"
-  if config_needs_legacy_parser "$schema_path"; then
+  local rendered_force_legacy_parser="false" legacy_parser_reason
+  if legacy_parser_reason="$(config_needs_legacy_parser "$schema_path")"; then
     rendered_force_legacy_parser="true"
-    log "  NOTE: ${pipeline_name} ${pipeline_version} defines a legacy config function (e.g. check_max()); forcing NXF_SYNTAX_PARSER=v1 at runtime."
+    log "  NOTE: ${pipeline_name} ${pipeline_version} ${legacy_parser_reason}; forcing NXF_SYNTAX_PARSER=v1 at runtime."
   fi
 
   # Build the --set TOKEN=VALUE arglist once and apply all substitutions in a

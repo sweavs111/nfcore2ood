@@ -94,6 +94,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- nf-core/viralrecon 3.0.0 apps failed at launch with `Invalid include
+  source: '.../conf/test_full_sispa.config'`: the release's `nextflow.config`
+  defines a `test_full_sispa` profile whose config file was never shipped,
+  and Nextflow's v2 config parser resolves every `includeConfig` up front,
+  even in profiles that aren't selected. `config_needs_legacy_parser` now
+  also forces `NXF_SYNTAX_PARSER=v1` (which only reads a profile's includes
+  when it's selected) for any literal `includeConfig` target missing from
+  the release, and the generation-time NOTE reports which reason applied.
 - `script.sh.erb` set `NXF_DISABLE_CHECK_LATEST=1`, but the `nextflow`
   launcher script's own pre-JVM version check only skips when the value is
   the literal string `true`, so it still curled nextflow.io on every launch

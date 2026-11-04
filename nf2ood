@@ -505,7 +505,12 @@ normalize_permissions() {
   local dir=$1
   find "$dir" -type d -exec chmod 755 {} +
   find "$dir" -type f -exec chmod 644 {} +
-  [[ -f "$dir/template/script.sh.erb" ]] && chmod 755 "$dir/template/script.sh.erb"
+  # An if, not `[[ ]] && chmod`: the landing page app has no script.sh.erb,
+  # and a false test as the last command would make this function fail and
+  # set -e end nf2ood before its summary.
+  if [[ -f "$dir/template/script.sh.erb" ]]; then
+    chmod 755 "$dir/template/script.sh.erb"
+  fi
 }
 
 generate_landing_page() {

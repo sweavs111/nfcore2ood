@@ -154,6 +154,25 @@ change e.g. `NF2OOD_SLURM_PROFILE` without regenerating every app, as long
 as the same env file path is visible from both the OOD host and compute
 nodes.
 
+### Only changed params are submitted; site download table
+
+`template/nf-params.json.erb` drops every param whose submitted value still
+equals what the untouched form field submits (`json2ood.py:
+render_defaults_json`, spliced at `__NF_PARAMS_DEFAULTS_JSON__`). Nextflow's
+`-params-file` outranks every config file, so passing untouched schema
+defaults would override the site's nf-core config -- e.g. mag's `gtdb_db`
+default (a remote URL) would beat a local database path set in
+`conf/pipeline/mag/hazel.config`. Trade-off: a user can't force a value
+equal to the schema default over the site config from the form.
+
+`NF2OOD_NETWORK_TABLE` (optional; `site/hazel_network.tsv` here) is the same
+table `gen_network_config.py` renders into Nextflow config. json2ood.py
+reads only its form rows for the pipeline being generated
+(`load_field_overrides`): `hide` drops a field (download switches whose
+process is denied), `hint` appends a local path to a field's help, and
+`precache` blanks the field's pre-filled default and says blank uses the
+local copy.
+
 ### Built-in test profile
 
 Every generated app has a "Run pipeline's built-in test profile" checkbox

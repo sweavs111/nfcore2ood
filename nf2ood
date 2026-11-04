@@ -592,12 +592,22 @@ generate_app() {
     return 1
   fi
 
+  # Optional site table of download params to hide, hint or blank in the
+  # form (see json2ood.py:load_field_overrides).
+  local network_table
+  local -a table_args=()
+  network_table="$(config_value NF2OOD_NETWORK_TABLE "")"
+  if [[ -n "$network_table" ]]; then
+    table_args=(--network-table "$network_table" --pipeline "$pipeline_name")
+  fi
+
   if ! python3 "$REPO_ROOT/json2ood.py" \
        "$schema_path" \
        "$generated_form" \
        "$base_form" \
        "$params_template" \
-       "$base_params"; then
+       "$base_params" \
+       "${table_args[@]}"; then
     log "WARNING: json2ood.py failed for ${pipeline_name} ${pipeline_version}; skipping."
     rm -rf "$app_dir"
     return 1

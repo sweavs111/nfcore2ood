@@ -84,6 +84,15 @@ def parse_args() -> argparse.Namespace:
         "base_params_erb",
         help="Base ERB template for nf-params.json.erb (contains __NF_PARAMS_ENTRIES__ placeholder)",
     )
+    parser.add_argument(
+        "--network-table",
+        help="Site network table (gen_network_config.py format); its hide/hint/precache "
+        "rows for --pipeline adjust the generated form fields",
+    )
+    parser.add_argument(
+        "--pipeline",
+        help="Pipeline name to match --network-table rows against (an nf-core- prefix is ignored)",
+    )
     return parser.parse_args()
 
 
@@ -222,6 +231,44 @@ def infer_widget_type(property_schema: dict[str, Any]) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class FieldOverride:
+    """Site adjustment to one generated form field, from the network table."""
+
+    action: str  # hide | hint | precache
+    value: str
+    note: str
+
+
+def load_field_overrides(table_path: Path, pipeline: str) -> dict[str, FieldOverride]:
+    """Map param name -> override for the hide/hint/precache rows of ``pipeline``.
+
+    precache rows don't change what the pipeline runs here (the site config
+    sets the param); they blank the form's pre-filled schema default, which
+    would otherwise be submitted and override the site config, and say in
+    the help text what a blank value uses instead.
+    """
+
+    from gen_network_config import parse_table  # same repo dir as this script
+
+    slug = pipeline.lower()
+    if slug.startswith("nf-core-"):
+        slug = slug[len("nf-core-"):]
+    overrides = {}
+    for row in parse_table(table_path):
+        if row["action"] in ("hide", "hint", "precache") and row["pipeline"] in ("*", slug):
+            overrides[row["param"]] = FieldOverride(row["action"], row["value"], row["note"])
+    return overrides
+
+
+def append_help(help_text: str, extra: str) -> str:
+    if not help_text:
+        return extra
+    if not help_text.rstrip().endswith((".", "!", "?", ":")):
+        help_text = help_text.rstrip() + "."
+    return f"{help_text} {extra}"
+
+
 def should_skip_property(property_name: str, property_schema: dict[str, Any]) -> bool:
     if property_name == "email":
         return True
@@ -236,8 +283,12 @@ def normalize_field(
     property_name: str,
     property_schema: dict[str, Any],
     required_fields: set[str],
+    overrides: dict[str, FieldOverride],
 ) -> FieldSpec | None:
     if should_skip_property(property_name, property_schema):
+        return None
+    override = overrides.get(property_name)
+    if override is not None and override.action == "hide":
         return None
 
     widget_type = infer_widget_type(property_schema)
@@ -247,19 +298,34 @@ def normalize_field(
     if multi_type_spec is not None:
         widget_type, default_value = multi_type_spec
 
+    help_text = first_line(property_schema.get("description"))
+    required = property_name in required_fields
+    if override is not None and override.action == "precache":
+        default_value = None
+        required = False
+        help_text = append_help(
+            help_text, f"Leave blank to use this cluster's local copy: `{override.value}`."
+        )
+    elif override is not None and override.action == "hint":
+        help_text = append_help(help_text, f"A local copy is available: `{override.value}`.")
+
     return FieldSpec(
         original_name=property_name,
         normalized_name=normalize_key(property_name),
         label=str(property_schema.get("title") or property_name),
-        help_text=first_line(property_schema.get("description")),
+        help_text=help_text,
         widget_type=widget_type,
-        required=property_name in required_fields,
+        required=required,
         default_value=default_value,
         enum_values=tuple(property_schema.get("enum", ())),
     )
 
 
-def normalize_group(group_name: str, definition: dict[str, Any]) -> GroupSpec | None:
+def normalize_group(
+    group_name: str,
+    definition: dict[str, Any],
+    overrides: dict[str, FieldOverride],
+) -> GroupSpec | None:
     if group_name in SKIPPED_DEFINITION_NAMES:
         return None
 
@@ -267,7 +333,7 @@ def normalize_group(group_name: str, definition: dict[str, Any]) -> GroupSpec | 
     fields = tuple(
         field_spec
         for property_name, property_schema in definition.get("properties", {}).items()
-        for field_spec in [normalize_field(property_name, property_schema, required_fields)]
+        for field_spec in [normalize_field(property_name, property_schema, required_fields, overrides)]
         if field_spec is not None
     )
 
@@ -280,12 +346,17 @@ def normalize_group(group_name: str, definition: dict[str, Any]) -> GroupSpec | 
     )
 
 
-def normalize_schema(schema: dict[str, Any]) -> list[GroupSpec]:
+def normalize_schema(
+    schema: dict[str, Any],
+    overrides: dict[str, FieldOverride] | None = None,
+) -> list[GroupSpec]:
     definitions = load_schema_definitions(schema)
     groups = []
     for group_name, definition in definitions.items():
-        group = normalize_group(group_name, definition)
-        if group is not None:
+        group = normalize_group(group_name, definition, overrides or {})
+        # Skip a group with no fields left (e.g. all hidden): it would render
+        # as a toggle that shows and hides nothing.
+        if group is not None and group.fields:
             groups.append(group)
     return groups
 
@@ -451,6 +522,40 @@ def render_params_entry(field_spec: FieldSpec) -> str:
 
 
 NF_PARAMS_ENTRIES_PLACEHOLDER = "__NF_PARAMS_ENTRIES__"
+NF_PARAMS_DEFAULTS_PLACEHOLDER = "__NF_PARAMS_DEFAULTS_JSON__"
+
+
+def form_default(field_spec: FieldSpec) -> SchemaValue:
+    """The value an untouched form field submits, before ERB type coercion.
+
+    Boolean fields render as a true/false select with no blank option, so
+    one without a schema default still submits false.
+    """
+
+    if field_spec.widget_type == "check_box":
+        return field_spec.default_value is True
+    return field_spec.default_value
+
+
+def render_defaults_json(groups: list[GroupSpec]) -> str:
+    """JSON object of each param's untouched-form value, for nf-params.json.erb.
+
+    The template drops any param still equal to it, so nf-params.json only
+    carries what the user changed. Otherwise every pre-filled schema default
+    is passed to -params-file, which outranks every config file and would
+    override site settings (e.g. a local database path in the cluster's
+    nf-core config) with the schema's default (e.g. a remote URL).
+    """
+
+    defaults = {
+        field_spec.original_name: form_default(field_spec)
+        for group in groups
+        for field_spec in group.fields
+        if form_default(field_spec) not in (None, "")
+    }
+    text = json.dumps(defaults, indent=2, sort_keys=True)
+    # Spliced into an ERB code block, where a literal %> would end it early.
+    return text.replace("%>", "%\\u003e")
 
 
 def render_params(groups: list[GroupSpec], base_params_content: str) -> str:
@@ -461,10 +566,9 @@ def render_params(groups: list[GroupSpec], base_params_content: str) -> str:
     function just splices the per-field entries into the
     ``__NF_PARAMS_ENTRIES__`` placeholder.
     """
-    if NF_PARAMS_ENTRIES_PLACEHOLDER not in base_params_content:
-        raise ValueError(
-            f"Base params template is missing the {NF_PARAMS_ENTRIES_PLACEHOLDER} placeholder."
-        )
+    for placeholder in (NF_PARAMS_ENTRIES_PLACEHOLDER, NF_PARAMS_DEFAULTS_PLACEHOLDER):
+        if placeholder not in base_params_content:
+            raise ValueError(f"Base params template is missing the {placeholder} placeholder.")
 
     entries = [
         render_params_entry(field_spec)
@@ -473,15 +577,16 @@ def render_params(groups: list[GroupSpec], base_params_content: str) -> str:
     ]
     return base_params_content.replace(
         NF_PARAMS_ENTRIES_PLACEHOLDER, ",\n".join(entries)
-    )
+    ).replace(NF_PARAMS_DEFAULTS_PLACEHOLDER, render_defaults_json(groups))
 
 
 def generate_outputs(
     schema: dict[str, Any],
     base_form_path: Path,
     base_params_path: Path,
+    overrides: dict[str, FieldOverride] | None = None,
 ) -> tuple[str, str]:
-    groups = normalize_schema(schema)
+    groups = normalize_schema(schema, overrides)
     base_form_content = base_form_path.read_text(encoding="utf-8")
     base_params_content = base_params_path.read_text(encoding="utf-8")
     return (
@@ -505,9 +610,15 @@ def main() -> int:
     output_form_path.parent.mkdir(parents=True, exist_ok=True)
     output_params_path.parent.mkdir(parents=True, exist_ok=True)
 
+    overrides: dict[str, FieldOverride] = {}
+    if args.network_table:
+        if not args.pipeline:
+            raise ValueError("--network-table needs --pipeline")
+        overrides = load_field_overrides(Path(args.network_table), args.pipeline)
+
     schema = read_json(schema_path)
     form_content, params_content = generate_outputs(
-        schema, base_form_path, base_params_path
+        schema, base_form_path, base_params_path, overrides
     )
     output_form_path.write_text(form_content, encoding="utf-8")
     output_params_path.write_text(params_content, encoding="utf-8")

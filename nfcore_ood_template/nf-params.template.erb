@@ -44,5 +44,20 @@ params = {
 __NF_PARAMS_ENTRIES__
 }
 
-params.reject! { |_k, v| v.is_a?(String) && v.strip.empty? }
+# What each field submits when left untouched (rendered by json2ood.py).
+# Only params the user changed go into nf-params.json: -params-file
+# outranks every config file, so passing an untouched schema default would
+# override the cluster's own nf-core config (e.g. a local database path).
+form_defaults = JSON.parse(<<~'NF2OOD_FORM_DEFAULTS')
+__NF_PARAMS_DEFAULTS_JSON__
+NF2OOD_FORM_DEFAULTS
+
+params.reject! do |k, v|
+  next true if v.is_a?(String) && v.strip.empty?
+  # params' keys are Symbols ("name": value literals); form_defaults' are Strings.
+  next false unless form_defaults.key?(k.to_s)
+  default = form_defaults[k.to_s]
+  # Compare as strings too, so e.g. a select submitting "1" matches 1.
+  v == default || v.to_s == default.to_s
+end
 %><%= JSON.pretty_generate(params) %>

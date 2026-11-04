@@ -1,0 +1,86 @@
+# How each network-dependent piece of a staged nf-core pipeline is handled
+# on Hazel, where compute nodes have no outbound internet. Read by
+# gen_network_config.py, which renders the Nextflow config fragments that
+# implement it.
+#
+# Lines starting with # and blank lines are ignored.
+#
+# Format: <pipeline>\t<process>\t<action>\t<param>\t<value>\t<note>
+#
+#   pipeline  nf-core pipeline slug (e.g. mag), or * for every pipeline.
+#             route/deny rows must use *: they are process-name rules in
+#             the shared conf/hazel_network.config, and nf-core modules keep
+#             the same process name across pipelines.
+#   process   process name (a Java regex, matched against the simple name),
+#             or - for a param that Nextflow itself fetches from the launcher
+#             job rather than a task (e.g. a remote URL default).
+#   action    route    run the process on the xfer partition (outbound
+#                      internet), with capped resources. For small downloads
+#                      that change often, where a local mirror isn't worth it.
+#             precache set <param>=<value> in conf/pipeline/<pipeline>/hazel.config.
+#                      The pipeline skips its download when the param is set,
+#                      so the process never runs.
+#             deny     fail the process immediately with a message naming
+#                      <param>. For downloads too large to fetch per run that
+#                      haven't been pre-cached yet.
+#             todo     undecided; rendered as a comment only.
+#             hide     leave <param> out of the generated OOD forms. For a
+#                      pipeline's own download switch whose process is
+#                      denied, so OOD users can't pick an option that fails.
+#                      Read by json2ood.py (via NF2OOD_NETWORK_TABLE), not
+#                      gen_network_config.py; process is -.
+#             hint     add "a local copy is available: <value>" to <param>'s
+#                      help text in the generated OOD forms, without setting
+#                      it. Also json2ood.py only; see the precache rule below.
+#   param     pipeline param (precache: the one to set; deny/todo: the one a
+#             user should set instead), or -.
+#   value     precache/hint: the local path; - otherwise.
+#   note      free text, copied into the generated config as a comment.
+#
+# precache vs hint: precache a param only if setting it changes *which*
+# database a step uses, never *whether* the step runs. Some params are also
+# the step's on-switch -- mag runs CAT whenever cat_db is set and MetaEuk
+# whenever metaeuk_db is set -- so precaching one would turn that step on
+# for every run (and mag errors if it's combined with the matching download
+# switch). Use hint for those, so users opt in by pasting the path.
+#
+# precache rows also blank the param's pre-filled schema default in the OOD
+# form, with help text naming the local copy, since a submitted value
+# overrides the config.
+#
+# Process names not listed here that still look like downloads
+# (*DOWNLOAD*, *UPDATE*, *DATASETGET, *DATABASES) are routed to xfer by a
+# catch-all in gen_network_config.py, so a new pipeline version degrades to
+# "slow on xfer" rather than "fails on compute" until it's classified here.
+
+# --- route: small, frequently updated downloads --------------------------
+*	PANGOLIN_UPDATEDATA	route	pango_database	-	viralrecon, default on; pangolin --update-data
+*	FREYJA_UPDATE	route	freyja_barcodes	-	viralrecon, default on; freyja update
+*	NEXTCLADE_DATASETGET	route	nextclade_dataset	-	viralrecon, when only nextclade_dataset_name is set
+*	DOWNLOAD_REFERENCE_.*	route	ref_taxonomy_storage	-	ampliseq, opt-in via --ref_taxonomy_storage; plain wget of taxonomy refs
+*	GUNC_DOWNLOADDB	route	gunc_db	-	mag, opt-in via --run_gunc without --gunc_db
+
+# --- deny: too large to fetch per run, not pre-cached yet ----------------
+*	CATPACK_DOWNLOAD	deny	cat_db	-	mag --cat_db_generate downloads and builds all of NCBI nr
+*	ENSEMBLVEP_DOWNLOAD	deny	vep_cache	-	sarek --download_cache; VEP caches are per genome/release and large
+*	SNPEFF_DOWNLOAD	deny	snpeff_cache	-	sarek --download_cache (same switch as VEP, so denied together)
+*	MMSEQS_DATABASES	deny	metaeuk_db	-	mag --metaeuk_mmseqs_db; mmseqs reference DBs (e.g. UniRef) are large
+
+# --- precache: local copies under /gpfs_backup/bioinfo_data/databases ----
+# Pinned release dirs, not latest/: each DB version must match the tool
+# version inside the pipeline's container, and latest/ is repointed
+# automatically when a new release is published.
+mag	-	precache	gtdb_db	/gpfs_backup/bioinfo_data/databases/gtdbtk_db/r232	GTDB-Tk 2.7.2 package; default is a remote URL Nextflow fetches from the launcher
+mag	BUSCO_BUSCO	precache	busco_db	/gpfs_backup/bioinfo_data/databases/busco_db/odb12.2_20260527	BUSCO 6.1.0; setting busco_db also adds --offline
+mag	GENOMAD_DOWNLOAD	precache	genomad_db	/gpfs_backup/bioinfo_data/databases/genomad_db/v1.9/genomad_db	geNomad 1.11.2 (DB v1.9 supports 1.10-1.13)
+mag	CHECKM2_DATABASEDOWNLOAD	precache	checkm2_db	/gpfs_backup/bioinfo_data/databases/checkm2_db/v3/uniref100.KO.1.dmnd	CheckM2 1.1.0 (DB v3 needs >= 1.1.0); run_checkm2 is off by default
+
+# --- hide: download switches whose process is denied above ---------------
+sarek	-	hide	download_cache	-	downloads VEP and snpEff caches (ENSEMBLVEP_DOWNLOAD/SNPEFF_DOWNLOAD denied), overriding vep_cache/snpeff_cache
+mag	-	hide	cat_db_generate	-	CATPACK_DOWNLOAD denied
+mag	-	hide	metaeuk_mmseqs_db	-	MMSEQS_DATABASES denied
+
+# --- todo: default-on remote inputs with no local copy yet ---------------
+viralrecon	-	todo	kraken2_db	-	default is an s3 URL; needs a human-only Kraken2 DB (PlusPFP would drop viral reads before assembly)
+ampliseq	-	todo	dada_ref_taxonomy	-	default sbdi-gtdb=R11-RS232-1 resolves to figshare URLs fetched by the launcher
+sarek	-	todo	igenomes_base	-	default genome GATK.GRCh38 reads s3://ngi-igenomes

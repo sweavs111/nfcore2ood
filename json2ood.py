@@ -306,9 +306,10 @@ def normalize_field(
     if override is not None and override.action == "precache":
         default_value = None
         required = False
-        help_text = append_help(
-            help_text, f"Leave blank to use this cluster's local copy: `{override.value}`."
-        )
+        if override.value != "null":
+            help_text = append_help(
+                help_text, f"Leave blank to use this cluster's local copy: `{override.value}`."
+            )
     elif override is not None and override.action == "hint":
         help_text = append_help(help_text, f"A local copy is available: `{override.value}`.")
 

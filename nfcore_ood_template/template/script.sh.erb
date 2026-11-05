@@ -206,6 +206,25 @@ EOF
   nextflow_command+=("-c" "test_resource_limits.config")
 fi
 
+# Site configs rendered by gen_network_config.py: process rules for runtime
+# downloads (route to xfer / deny) and, per pipeline, local database
+# params. Passed with -c rather than via custom_config_base, which mirrors
+# upstream nf-core/configs -- and some pipelines (e.g. mag) skip their
+# pipeline/<name>.config there under NXF_OFFLINE anyway. -params-file still
+# outranks these, so a value the user changed in the form wins. The
+# per-pipeline params are skipped under the test profile, whose own small
+# test databases they would otherwise replace. ${var-default} (no colon):
+# an explicit empty NF2OOD_SITE_CONFIG_DIR in the env file disables this.
+site_config_dir="${NF2OOD_SITE_CONFIG_DIR-__NF2OOD_SITE_CONFIG_DIR__}"
+if [[ -n "${site_config_dir}" ]]; then
+  if [[ -f "${site_config_dir}/hazel_network.config" ]]; then
+    nextflow_command+=("-c" "${site_config_dir}/hazel_network.config")
+  fi
+  if [[ "${use_test_profile}" != "1" && -f "${site_config_dir}/pipeline/__PIPELINE_SLUG__.config" ]]; then
+    nextflow_command+=("-c" "${site_config_dir}/pipeline/__PIPELINE_SLUG__.config")
+  fi
+fi
+
 nextflow_command+=("${resume_flag[@]}")
 
 printf 'Executing:'

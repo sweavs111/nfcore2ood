@@ -434,6 +434,10 @@ customize_generated_app() {
   # Empty (the default) leaves plugins in each user's own NXF_HOME.
   rendered_plugins_dir="$(config_value NF2OOD_PLUGINS_DIR "")"
 
+  # Site Nextflow configs from gen_network_config.py, passed with -c.
+  # Empty (the default) adds none.
+  rendered_site_config_dir="$(config_value NF2OOD_SITE_CONFIG_DIR "")"
+
   # Upper bound for the "Number of hours" field, enforced both in the form
   # (max:) and in submit.yml.erb (clamped before it reaches --time).
   # Default matches Hazel's normal/xfer QOS MaxWall of 4 days.
@@ -483,6 +487,7 @@ customize_generated_app() {
     --set "__NF2OOD_CACHE_RESET_PATH__=${rendered_cache_reset_path}"
     --set "__NF2OOD_USAGE_LOG__=${rendered_usage_log}"
     --set "__NF2OOD_PLUGINS_DIR__=${rendered_plugins_dir}"
+    --set "__NF2OOD_SITE_CONFIG_DIR__=${rendered_site_config_dir}"
     --set "__NF2OOD_MAX_HOURS__=${rendered_max_hours}"
   )
 

@@ -1,7 +1,12 @@
 # How each network-dependent piece of a staged nf-core pipeline is handled
 # on Hazel, where compute nodes have no outbound internet. Read by
 # gen_network_config.py, which renders the Nextflow config fragments that
-# implement it.
+# implement it into the site config dir (NF2OOD_SITE_CONFIG_DIR, loaded by
+# every generated OOD app with -c), and by json2ood.py for its form rows.
+#
+# To deploy a change:
+#   ./gen_network_config.py site/hazel_network.tsv "$NF2OOD_SITE_CONFIG_DIR"
+# Only hide/hint/precache changes (form rows) also need apps regenerated.
 #
 # Lines starting with # and blank lines are ignored.
 #
@@ -9,7 +14,7 @@
 #
 #   pipeline  nf-core pipeline slug (e.g. mag), or * for every pipeline.
 #             route/deny rows must use *: they are process-name rules in
-#             the shared conf/hazel_network.config, and nf-core modules keep
+#             the shared hazel_network.config, and nf-core modules keep
 #             the same process name across pipelines.
 #   process   process name (a Java regex, matched against the simple name),
 #             or - for a param that Nextflow itself fetches from the launcher
@@ -17,7 +22,7 @@
 #   action    route    run the process on the xfer partition (outbound
 #                      internet), with capped resources. For small downloads
 #                      that change often, where a local mirror isn't worth it.
-#             precache set <param>=<value> in conf/pipeline/<pipeline>/hazel.config.
+#             precache set <param>=<value> in pipeline/<pipeline>.config.
 #                      The pipeline skips its download when the param is set,
 #                      so the process never runs.
 #             deny     fail the process immediately with a message naming
@@ -34,7 +39,10 @@
 #                      it. Also json2ood.py only; see the precache rule below.
 #   param     pipeline param (precache: the one to set; deny/todo: the one a
 #             user should set instead), or -.
-#   value     precache/hint: the local path; - otherwise.
+#   value     precache/hint: the local path; - otherwise. precache also
+#             takes null, to clear a remote URL default that nf-schema
+#             validation checks for existence (it can't offline) when the
+#             pipeline only uses it in an off-by-default mode.
 #   note      free text, copied into the generated config as a comment.
 #
 # precache vs hint: precache a param only if setting it changes *which*
@@ -73,6 +81,7 @@
 mag	-	precache	gtdb_db	/gpfs_backup/bioinfo_data/databases/gtdbtk_db/r232	GTDB-Tk 2.7.2 package; default is a remote URL Nextflow fetches from the launcher
 mag	BUSCO_BUSCO	precache	busco_db	/gpfs_backup/bioinfo_data/databases/busco_db/odb12.2_20260527	BUSCO 6.1.0; setting busco_db also adds --offline
 mag	GENOMAD_DOWNLOAD	precache	genomad_db	/gpfs_backup/bioinfo_data/databases/genomad_db/v1.9/genomad_db	geNomad 1.11.2 (DB v1.9 supports 1.10-1.13)
+mag	-	precache	checkm_download_url	null	CheckM1 data URL; schema has exists: true, so offline validation fails on every run. Only used with --run_checkm (off by default) and no --checkm_db, which can't work offline anyway
 mag	CHECKM2_DATABASEDOWNLOAD	precache	checkm2_db	/gpfs_backup/bioinfo_data/databases/checkm2_db/v3/uniref100.KO.1.dmnd	CheckM2 1.1.0 (DB v3 needs >= 1.1.0); run_checkm2 is off by default
 
 # --- hide: download switches whose process is denied above ---------------

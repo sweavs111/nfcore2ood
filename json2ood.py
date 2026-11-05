@@ -304,12 +304,18 @@ def normalize_field(
     help_text = first_line(property_schema.get("description"))
     required = property_name in required_fields
     if override is not None and override.action == "precache":
-        default_value = None
         required = False
-        if override.value != "null":
-            help_text = append_help(
-                help_text, f"Leave blank to use this cluster's local copy: `{override.value}`."
-            )
+        if override.value in ("true", "false"):
+            # A flag the site config sets: show its value, so an untouched
+            # field (not submitted) displays what the run will actually use.
+            default_value = override.value == "true"
+            help_text = append_help(help_text, f"This cluster's default: `{override.value}`.")
+        else:
+            default_value = None
+            if override.value != "null":
+                help_text = append_help(
+                    help_text, f"Leave blank to use this cluster's local copy: `{override.value}`."
+                )
     elif override is not None and override.action == "hint":
         help_text = append_help(help_text, f"A local copy is available: `{override.value}`.")
 

@@ -434,7 +434,8 @@ customize_generated_app() {
   # Empty (the default) leaves plugins in each user's own NXF_HOME.
   rendered_plugins_dir="$(config_value NF2OOD_PLUGINS_DIR "")"
 
-  # Site Nextflow configs from gen_network_config.py, passed with -c.
+  # Site Nextflow settings from gen_network_config.py (process rules and
+  # per-pipeline params; see template/script.sh.erb).
   # Empty (the default) adds none.
   rendered_site_config_dir="$(config_value NF2OOD_SITE_CONFIG_DIR "")"
 

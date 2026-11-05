@@ -160,12 +160,44 @@ outdir_value="<%= context.outdir.to_s.strip %>"
 
 nextflow_command=(nextflow run "${pipeline_path}")
 
+# Site configs rendered by gen_network_config.py (NF2OOD_SITE_CONFIG_DIR):
+# hazel_network.config (process rules, passed with -c below) and, per
+# pipeline, pipeline/<slug>.json (local database params). ${var-default}
+# (no colon): an explicit empty NF2OOD_SITE_CONFIG_DIR disables both.
+site_config_dir="${NF2OOD_SITE_CONFIG_DIR-__NF2OOD_SITE_CONFIG_DIR__}"
+site_params="${site_config_dir:+${site_config_dir}/pipeline/__PIPELINE_SLUG__.json}"
+
 # The pipeline's built-in test profile ships its own dataset/parameter
 # values via -profile config, which CLI params take precedence over. So
 # when it's selected, skip -params-file entirely rather than let the
-# form's (mostly blank) fields silently override the test dataset.
+# form's (mostly blank) fields silently override the test dataset -- and
+# skip the site params with it, which would replace its small test
+# databases.
+#
+# Otherwise the site params go in through -params-file too, merged under
+# the form's values (the user's wins), not as a -c config: a pipeline's
+# own config evaluates expressions like mag's
+#   ext.args = params.busco_db ? '--offline' : ''
+# once, while it's parsed -- before any -c file is applied, but after
+# -params-file values are known. As a -c param, busco_db reached BUSCO
+# but --offline didn't. nf-params.effective.json records what was passed.
 if [[ "${use_test_profile}" != "1" ]]; then
-  nextflow_command+=("-params-file" "nf-params.json")
+  params_file="nf-params.json"
+  if [[ -n "${site_params}" && -f "${site_params}" ]]; then
+    python3 -I - "${site_params}" nf-params.json nf-params.effective.json <<'PY'
+import json, sys
+site_path, user_path, out_path = sys.argv[1:]
+with open(site_path) as f:
+    merged = json.load(f)
+with open(user_path) as f:
+    merged.update(json.load(f))
+with open(out_path, "w") as f:
+    json.dump(merged, f, indent=2)
+    f.write("\n")
+PY
+    params_file="nf-params.effective.json"
+  fi
+  nextflow_command+=("-params-file" "${params_file}")
 fi
 
 nextflow_command+=("--outdir" "${outdir_value}")
@@ -206,23 +238,18 @@ EOF
   nextflow_command+=("-c" "test_resource_limits.config")
 fi
 
-# Site configs rendered by gen_network_config.py: process rules for runtime
-# downloads (route to xfer / deny) and, per pipeline, local database
-# params. Passed with -c rather than via custom_config_base, which mirrors
-# upstream nf-core/configs -- and some pipelines (e.g. mag) skip their
-# pipeline/<name>.config there under NXF_OFFLINE anyway. -params-file still
-# outranks these, so a value the user changed in the form wins. The
-# per-pipeline params are skipped under the test profile, whose own small
-# test databases they would otherwise replace. ${var-default} (no colon):
-# an explicit empty NF2OOD_SITE_CONFIG_DIR in the env file disables this.
-site_config_dir="${NF2OOD_SITE_CONFIG_DIR-__NF2OOD_SITE_CONFIG_DIR__}"
-if [[ -n "${site_config_dir}" ]]; then
-  if [[ -f "${site_config_dir}/hazel_network.config" ]]; then
-    nextflow_command+=("-c" "${site_config_dir}/hazel_network.config")
-  fi
-  if [[ "${use_test_profile}" != "1" && -f "${site_config_dir}/pipeline/__PIPELINE_SLUG__.config" ]]; then
-    nextflow_command+=("-c" "${site_config_dir}/pipeline/__PIPELINE_SLUG__.config")
-  fi
+# Process rules for runtime downloads (route to xfer / deny), from the site
+# config dir above. Passed with -c rather than via custom_config_base,
+# which mirrors upstream nf-core/configs; withName rules are applied when
+# each task is created, so a -c file is early enough for them.
+if [[ -n "${site_config_dir}" && -f "${site_config_dir}/hazel_network.config" ]]; then
+  nextflow_command+=("-c" "${site_config_dir}/hazel_network.config")
+fi
+# Per-pipeline process rules (e.g. BUSCO's --opt-out-run-stats for mag).
+# Applied under the test profile too: its tasks also run on no-internet
+# compute nodes.
+if [[ -n "${site_config_dir}" && -f "${site_config_dir}/pipeline/__PIPELINE_SLUG__.config" ]]; then
+  nextflow_command+=("-c" "${site_config_dir}/pipeline/__PIPELINE_SLUG__.config")
 fi
 
 nextflow_command+=("${resume_flag[@]}")

@@ -1,8 +1,8 @@
 # How each network-dependent piece of a staged nf-core pipeline is handled
 # on Hazel, where compute nodes have no outbound internet. Read by
 # gen_network_config.py, which renders the Nextflow config fragments that
-# implement it into the site config dir (NF2OOD_SITE_CONFIG_DIR, loaded by
-# every generated OOD app with -c), and by json2ood.py for its form rows.
+# implement it into the site config dir (NF2OOD_SITE_CONFIG_DIR, read by
+# every generated OOD app's launcher), and by json2ood.py for its form rows.
 #
 # To deploy a change:
 #   ./gen_network_config.py site/hazel_network.tsv "$NF2OOD_SITE_CONFIG_DIR"
@@ -22,7 +22,8 @@
 #   action    route    run the process on the xfer partition (outbound
 #                      internet), with capped resources. For small downloads
 #                      that change often, where a local mirror isn't worth it.
-#             precache set <param>=<value> in pipeline/<pipeline>.config.
+#             precache set <param>=<value> in pipeline/<pipeline>.json,
+#                      which the launcher merges under the form's params.
 #                      The pipeline skips its download when the param is set,
 #                      so the process never runs.
 #             deny     fail the process immediately with a message naming
@@ -34,6 +35,15 @@
 #                      denied, so OOD users can't pick an option that fails.
 #                      Read by json2ood.py (via NF2OOD_NETWORK_TABLE), not
 #                      gen_network_config.py; process is -.
+#             process  add the Nextflow directive in <value> (e.g. an ext.args
+#                      closure) to <process> in pipeline/<pipeline>.config,
+#                      which the launcher passes with -c, also under the test
+#                      profile. For tool flags a no-internet node needs that
+#                      the pipeline doesn't set. param is -. A directive set
+#                      this way replaces the pipeline's own value for it, so
+#                      carry over any logic the pipeline had. Write process
+#                      exactly as the pipeline's own withName selector, so
+#                      the rule merges into that block.
 #             hint     add "a local copy is available: <value>" to <param>'s
 #                      help text in the generated OOD forms, without setting
 #                      it. Also json2ood.py only; see the precache rule below.
@@ -42,7 +52,8 @@
 #   value     precache/hint: the local path; - otherwise. precache also
 #             takes null, to clear a remote URL default that nf-schema
 #             validation checks for existence (it can't offline) when the
-#             pipeline only uses it in an off-by-default mode.
+#             pipeline only uses it in an off-by-default mode; and true/false,
+#             for a site default of a flag (the form then shows that value).
 #   note      free text, copied into the generated config as a comment.
 #
 # precache vs hint: precache a param only if setting it changes *which*
@@ -82,7 +93,15 @@ mag	-	precache	gtdb_db	/gpfs_backup/bioinfo_data/databases/gtdbtk_db/r232	GTDB-T
 mag	BUSCO_BUSCO	precache	busco_db	/gpfs_backup/bioinfo_data/databases/busco_db/odb12.2_20260527	BUSCO 6.1.0; setting busco_db also adds --offline
 mag	GENOMAD_DOWNLOAD	precache	genomad_db	/gpfs_backup/bioinfo_data/databases/genomad_db/v1.9/genomad_db	geNomad 1.11.2 (DB v1.9 supports 1.10-1.13)
 mag	-	precache	checkm_download_url	null	CheckM1 data URL; schema has exists: true, so offline validation fails on every run. Only used with --run_checkm (off by default) and no --checkm_db, which can't work offline anyway
+mag	-	precache	gtdbtk_single_job	true	Classify all bins in one GTDB-Tk job (10 CPUs) instead of one per bin: each job loads the full r232 reference data, needing 128 GB (mag asks 140, Hazel caps it) and a scarce >128 GB node
 mag	CHECKM2_DATABASEDOWNLOAD	precache	checkm2_db	/gpfs_backup/bioinfo_data/databases/checkm2_db/v3/uniref100.KO.1.dmnd	CheckM2 1.1.0 (DB v3 needs >= 1.1.0); run_checkm2 is off by default
+
+# --- process: tool flags for offline compute nodes ----------------------
+# BUSCO posts anonymous usage stats after every run, even with --offline; on
+# compute nodes each attempt hangs ~2 min until the connection times out.
+# mag's own ext.args is params.busco_db ? '--offline' : '' (kept here, as a
+# closure so it sees the site busco_db too).
+mag	BUSCO_BUSCO	process	-	ext.args = { (params.busco_db ? '--offline ' : '') + '--opt-out-run-stats' }	BUSCO usage-stats upload times out offline (~2 min per task)
 
 # --- hide: download switches whose process is denied above ---------------
 sarek	-	hide	download_cache	-	downloads VEP and snpEff caches (ENSEMBLVEP_DOWNLOAD/SNPEFF_DOWNLOAD denied), overriding vep_cache/snpeff_cache

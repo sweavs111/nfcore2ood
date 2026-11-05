@@ -59,6 +59,9 @@ class FieldSpec:
     required: bool
     default_value: SchemaValue = None
     enum_values: tuple[SchemaValue, ...] = ()
+    # number_field only: True for schema type "integer", False for "number"
+    # (which allows decimals, e.g. an FDR of 0.05).
+    integer_only: bool = True
 
 
 @dataclass(frozen=True)
@@ -318,6 +321,7 @@ def normalize_field(
         required=required,
         default_value=default_value,
         enum_values=tuple(property_schema.get("enum", ())),
+        integer_only=normalize_schema_type(property_schema.get("type", "")) != "number",
     )
 
 
@@ -421,6 +425,7 @@ def render_scalar_field(
     default_value: SchemaValue,
     enum_values: tuple[SchemaValue, ...],
     help_text: str,
+    integer_only: bool = True,
 ) -> list[str]:
     lines = [
         f"  {field_name}:",
@@ -467,7 +472,9 @@ def render_scalar_field(
             and not isinstance(default_value, bool)
         ):
             lines.append(f"    value: {default_value}")
-        lines.append("    step: 1")
+        # The browser rejects any value off the step grid, so "number"
+        # params (thresholds, FDRs, ...) need step any to accept decimals.
+        lines.append("    step: 1" if integer_only else "    step: any")
     elif widget_type == "select":
         lines.append("    widget: select")
         lines.extend(render_select_options(default_value, enum_values))
@@ -487,6 +494,7 @@ def render_field(field_spec: FieldSpec) -> list[str]:
         default_value=field_spec.default_value,
         enum_values=field_spec.enum_values,
         help_text=field_spec.help_text,
+        integer_only=field_spec.integer_only,
     )
 
 

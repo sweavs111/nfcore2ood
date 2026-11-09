@@ -282,6 +282,8 @@ nfcore_ood_template/          # the OOD batch-connect app template, copied per a
   manifest.yml / submit.yml.erb / view.html.erb
   template/before.sh.erb      # OOD batch-connect conn_params setup
   template/script.sh.erb      # the actual `nextflow run` launch script
+site/patches/<pipeline>/<revision>/*.patch  # code fixes the downloader applies
+                              # (patch -p1 in the code dir; --patches-only)
 landing_page_template/        # static assets for the generated landing page
   manifest.yml                # unparameterized; copied as-is
   index.template.html         # __SECTIONS__ splice point for per-subcategory cards

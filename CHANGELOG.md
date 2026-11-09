@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Site patches for downloaded pipelines. `download_nfcore_pipeline.sh`
+  applies `site/patches/<name>/<revision>/*.patch` (`NF2OOD_PATCH_DIR` /
+  `--patch-dir`) after each download; `--patches-only` patches an existing
+  download. Already-applied patches are skipped and a patch that no longer
+  applies is an error. First patch: `mag/5.5.0/busco_followlinks.patch`
+  adds `followLinks: false` to the two 6-level-deep
+  `single_copy_busco_sequences` outputs of the `BUSCO_BUSCO` module.
+  Nextflow walks the whole task dir to that depth when collecting them and
+  followed the symlink into the local BUSCO database (~1.7M files), taking
+  ~19 min for 7 test bins. mag doesn't use or publish those outputs.
 - Optional shared, pre-installed Nextflow plugin directory
   (`NF2OOD_PLUGINS_DIR`, default empty = per-user `$NXF_HOME/plugins`).
   `script.sh.erb` exports it as `NXF_PLUGINS_DIR`, so `NXF_OFFLINE=true`

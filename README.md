@@ -100,6 +100,7 @@ The script currently:
 - downloads the requested pipeline with `nf-core pipelines download`
 - stores the pipeline under a local `nf-core-<name>/<version>` directory
 - replaces the per-pipeline `configs` directory with a symlink to the shared central copy
+- applies any site patches in `site/patches/<name>/<revision>/*.patch` (see below)
 - allows site overrides through CLI flags while using defaults from `nf2ood.env`
 
 Configs are maintained centrally in one local nf-core/configs checkout -- by
@@ -108,6 +109,27 @@ as `--custom_config_base`. The downloader removes the downloaded local `configs`
 directory and points each pipeline to that shared copy instead. This means you
 update configs once in the central location and all downloaded pipelines use
 the same maintained set.
+
+### Site patches
+
+Some problems in a downloaded pipeline can't be fixed from config, e.g. a
+module's output declarations. Put a unified diff, relative to the pipeline
+code directory (`<revision>/<revision_with_underscores>/`, applied with
+`patch -p1`), at `site/patches/<name>/<revision>/<anything>.patch`. The
+downloader applies every patch for that name and revision after each
+download. A patch that is already applied is skipped, and one that no longer
+applies (for example after upstream changed the file) stops the script, so
+it is never silently dropped. Patches are per revision: when downloading a
+new revision, check whether the problem is still there upstream and copy the
+patch forward if it is. To patch a pipeline that is already downloaded:
+
+```bash
+./download_nfcore_pipeline.sh --name mag --revision 5.5.0 --patches-only
+```
+
+Say what each patch fixes and why in the text above its first `---` line
+(`patch` ignores it). `NF2OOD_PATCH_DIR` (or `--patch-dir`) points at a
+different patches tree; set it to `""` to turn patching off.
 
 The downloader does not require a container engine module. If `apptainer` or
 `singularity` is already installed on `PATH`, the script can use it directly.
@@ -212,7 +234,9 @@ Downloader defaults are derived from those settings:
 
 `download_nfcore_pipeline.sh` also reads a few downloader-only variables
 (see comments in [`nf2ood.env.example`](./nf2ood.env.example)):
-`NFCORE_ENGINE_MODULE`, `NFCORE_MODULE_NAME`, and `NFCORE_NXF_SYNTAX_PARSER`
+`NFCORE_ENGINE_MODULE`, `NFCORE_MODULE_NAME`, `NF2OOD_PATCH_DIR` (default
+`site/patches` next to the script; see [Site patches](#site-patches)), and
+`NFCORE_NXF_SYNTAX_PARSER`
 (default `v1` — pins the legacy Nextflow config parser for the `nextflow
 inspect` calls the downloader makes while resolving container images, since
 recent Nextflow releases' stricter default parser rejects config syntax

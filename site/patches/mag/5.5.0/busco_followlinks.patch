@@ -1,0 +1,30 @@
+Stop BUSCO_BUSCO output collection from walking the staged BUSCO database.
+
+Nextflow matches an output glob by walking the whole task work dir down to
+the glob's depth, following symlinks. The two single_copy_busco_sequences
+globs are 6 levels deep, so for every BUSCO task they walk the symlinked
+local busco_db (~1.7M files on Hazel), ~3.5M file checks per task -- 19 min
+of output collection for 7 test bins. followLinks: false stops the walk at
+the database symlink.
+
+Side effect: in auto-lineage mode run_<lineage> is itself a symlink, so these
+two (optional) outputs come back empty. mag uses neither output and never
+publishes them (only *{.txt,.json,.log}); the files stay inside the *-busco
+dir (busco_dir output).
+
+Upstream: nf-core/modules busco/busco (git_sha 3927a974, still present on
+master as of 2026-11-09). Applied by download_nfcore_pipeline.sh.
+
+--- a/modules/nf-core/busco/busco/main.nf
++++ b/modules/nf-core/busco/busco/main.nf
+@@ -34,8 +34,8 @@
+     tuple val(meta), path("*-busco/*/translated_proteins"), emit: translated_dir, optional: true
+     tuple val(meta), path("*-busco"), emit: busco_dir
+     tuple val(meta), path("busco_downloads/lineages/*"), emit: downloaded_lineages, optional: true
+-    tuple val(meta), path("*-busco/*/run_*/busco_sequences/single_copy_busco_sequences/*.faa"), emit: single_copy_faa, optional: true
+-    tuple val(meta), path("*-busco/*/run_*/busco_sequences/single_copy_busco_sequences/*.fna"), emit: single_copy_fna, optional: true
++    tuple val(meta), path("*-busco/*/run_*/busco_sequences/single_copy_busco_sequences/*.faa", followLinks: false), emit: single_copy_faa, optional: true
++    tuple val(meta), path("*-busco/*/run_*/busco_sequences/single_copy_busco_sequences/*.fna", followLinks: false), emit: single_copy_fna, optional: true
+     tuple val("${task.process}"), val('busco'), eval("busco --version 2> /dev/null | sed 's/BUSCO //g'"), emit: versions_busco, topic: versions
+ 
+     when:

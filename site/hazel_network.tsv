@@ -95,6 +95,7 @@ mag	GENOMAD_DOWNLOAD	precache	genomad_db	/gpfs_backup/bioinfo_data/databases/gen
 mag	-	precache	checkm_download_url	null	CheckM1 data URL; schema has exists: true, so offline validation fails on every run. Only used with --run_checkm (off by default) and no --checkm_db, which can't work offline anyway
 mag	-	precache	gtdbtk_single_job	true	Classify all bins in one GTDB-Tk job (10 CPUs) instead of one per bin: each job loads the full r232 reference data, needing 128 GB (mag asks 140, Hazel caps it) and a scarce >128 GB node
 mag	CHECKM2_DATABASEDOWNLOAD	precache	checkm2_db	/gpfs_backup/bioinfo_data/databases/checkm2_db/v3/uniref100.KO.1.dmnd	CheckM2 1.1.0 (DB v3 needs >= 1.1.0); run_checkm2 is off by default
+viralrecon	-	precache	kraken2_db	/gpfs_backup/bioinfo_data/databases/kraken2_human/grch38p14_chm13v2	Human-only Kraken2 2.1.6 DB (GRCh38.p14 + T2T-CHM13v2.0) for host removal; default is an s3 URL the launcher fetches. Must be host-only: viralrecon assembles the reads Kraken2 leaves unclassified, so PlusPFP would drop viral reads
 
 # --- process: tool flags for offline compute nodes ----------------------
 # BUSCO posts anonymous usage stats after every run, even with --offline; on
@@ -109,6 +110,5 @@ mag	-	hide	cat_db_generate	-	CATPACK_DOWNLOAD denied
 mag	-	hide	metaeuk_mmseqs_db	-	MMSEQS_DATABASES denied
 
 # --- todo: default-on remote inputs with no local copy yet ---------------
-viralrecon	-	todo	kraken2_db	-	default is an s3 URL; needs a human-only Kraken2 DB (PlusPFP would drop viral reads before assembly)
 ampliseq	-	todo	dada_ref_taxonomy	-	default sbdi-gtdb=R11-RS232-1 resolves to figshare URLs fetched by the launcher
 sarek	-	todo	igenomes_base	-	default genome GATK.GRCh38 reads s3://ngi-igenomes

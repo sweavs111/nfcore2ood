@@ -50,12 +50,16 @@
 #             note     add <value> (free text) to <param>'s help text in the
 #                      generated OOD forms. json2ood.py only.
 #   param     pipeline param (precache: the one to set; deny/todo: the one a
-#             user should set instead), or -.
+#             user should set instead), or -. precache also takes a/b/c to set
+#             one key inside a nested map param without replacing the rest
+#             (e.g. one entry of ampliseq's dada_ref_databases).
 #   value     precache/hint: the local path; note: the help text; - otherwise. precache also
 #             takes null, to clear a remote URL default that nf-schema
 #             validation checks for existence (it can't offline) when the
 #             pipeline only uses it in an off-by-default mode; and true/false,
-#             for a site default of a flag (the form then shows that value).
+#             for a site default of a flag (the form then shows that value);
+#             and a JSON list (value starting with [) for a param that takes
+#             several files.
 #   note      free text, copied into the generated config as a comment.
 #
 # precache vs hint: precache a param only if setting it changes *which*
@@ -100,6 +104,7 @@ mag	CHECKM2_DATABASEDOWNLOAD	precache	checkm2_db	/gpfs_backup/bioinfo_data/datab
 viralrecon	-	precache	kraken2_db	/gpfs_backup/bioinfo_data/databases/kraken2_human/grch38p14_chm13v2	Human-only Kraken2 2.1.6 DB (GRCh38.p14 + T2T-CHM13v2.0) for host removal; default is an s3 URL the launcher fetches. Must be host-only: viralrecon assembles the reads Kraken2 leaves unclassified, so PlusPFP would drop viral reads
 sarek	-	precache	vep_cache	/gpfs_backup/bioinfo_data/databases/vep_cache/r116	Ensembl VEP r116 caches (homo_sapiens GRCh38 only; matches GATK.GRCh38 vep_cache_version 116); default is s3://annotation-cache, staged by the launcher
 sarek	-	precache	snpeff_cache	/gpfs_backup/bioinfo_data/databases/snpeff_cache/20251125	snpEff 5.0 data for every snpeff_db sarek 3.10.0 genome configs use (GRCh38.99, GRCh37.87, GRCm38.99, ...); default is s3://annotation-cache
+ampliseq	-	precache	dada_ref_databases/sbdi-gtdb=R11-RS232-1/file	["/usr/local/usrapps/nfcore/backend/references/ampliseq/sbdi-gtdb/R11-RS232-1/sbdi-gtdb-sativa.r11rs232-1.1genome.assignTaxonomy.fna.gz", "/usr/local/usrapps/nfcore/backend/references/ampliseq/sbdi-gtdb/R11-RS232-1/sbdi-gtdb-sativa.r11rs232-1.20genomes.addSpecies.fna.gz"]	The default dada_ref_taxonomy (2.18.0): replaces just that entry's two figshare URLs, which the launcher would otherwise fetch, keeping its reformat script and 8 taxonomy levels (dada_ref_tax_custom would drop both). md5-checked; see SOURCES.txt. Not its pplace files (--run_pplace, off by default)
 
 # --- process: tool flags for offline compute nodes ----------------------
 # BUSCO posts anonymous usage stats after every run, even with --offline; on
@@ -113,11 +118,12 @@ viralrecon	-	note	genome	Offline runs: this genome's files are GitHub URLs, so a
 
 sarek	-	note	genome	Offline runs: iGenomes files are on s3 and can't be fetched; set igenomes_ignore and give local reference files.	no local iGenomes mirror yet (GATK.GRCh38 is 63 GB); see the igenomes_base todo
 
+ampliseq	-	note	dada_ref_taxonomy	Offline runs: only the default (sbdi-gtdb=R11-RS232-1) has a local copy. For any other reference, also set ref_taxonomy_storage to a directory (it is then downloaded there on the xfer partition) or give local files with dada_ref_tax_custom. Leave ref_taxonomy_storage blank with the default.	other references are remote URLs the launcher fetches; with ref_taxonomy_storage set, DOWNLOAD_REFERENCE would try to wget the local default paths and fail
+
 # --- hide: download switches whose process is denied above ---------------
 sarek	-	hide	download_cache	-	downloads VEP and snpEff caches (ENSEMBLVEP_DOWNLOAD/SNPEFF_DOWNLOAD denied), overriding vep_cache/snpeff_cache
 mag	-	hide	cat_db_generate	-	CATPACK_DOWNLOAD denied
 mag	-	hide	metaeuk_mmseqs_db	-	MMSEQS_DATABASES denied
 
 # --- todo: default-on remote inputs with no local copy yet ---------------
-ampliseq	-	todo	dada_ref_taxonomy	-	default sbdi-gtdb=R11-RS232-1 resolves to figshare URLs fetched by the launcher
 sarek	-	todo	igenomes_base	-	default genome GATK.GRCh38 reads s3://ngi-igenomes

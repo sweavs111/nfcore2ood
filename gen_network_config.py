@@ -85,6 +85,12 @@ def parse_table(table_path: Path) -> list[dict[str, str]]:
             raise ValueError(f"{table_path}:{lineno}: {row['action']} rows need pipeline * and a process name")
         if row["action"] in ("precache", "hint", "note") and (row["pipeline"] == "*" or row["param"] == "-" or row["value"] == "-"):
             raise ValueError(f"{table_path}:{lineno}: {row['action']} rows need a pipeline, param and value")
+        if row["action"] == "precache" and row["value"].startswith("["):
+            try:
+                if not isinstance(json.loads(row["value"]), list):
+                    raise ValueError("not a list")
+            except ValueError as exc:
+                raise ValueError(f"{table_path}:{lineno}: precache value starting with [ must be a JSON list: {exc}") from None
         if row["action"] == "process" and (row["pipeline"] == "*" or row["process"] == "-" or row["value"] == "-"):
             raise ValueError(f"{table_path}:{lineno}: process rows need a pipeline, process name and directive")
         if row["action"] == "hide" and row["param"] == "-":
@@ -155,12 +161,38 @@ def shell_quote(text: str) -> str:
 JSON_LITERALS = {"null": None, "true": True, "false": False}
 
 
+def precache_value(value: str):
+    """A precache value as JSON: null/true/false, a JSON list (a value
+    starting with "["), or else a plain string (normally a path)."""
+    if value in JSON_LITERALS:
+        return JSON_LITERALS[value]
+    if value.startswith("["):
+        return json.loads(value)
+    return value
+
+
+def precache_paths(value: str) -> list[str]:
+    """The local paths a precache/hint value names (none for a literal)."""
+    v = precache_value(value)
+    if isinstance(v, list):
+        return [x for x in v if isinstance(x, str)]
+    return [v] if isinstance(v, str) else []
+
+
 def render_pipeline_params(rows: list[dict[str, str]]) -> str:
-    params = {
-        r["param"]: JSON_LITERALS.get(r["value"], r["value"])
-        for r in rows
-        if r["action"] == "precache"
-    }
+    # A param of a/b/c sets one key inside a nested map param (e.g. one
+    # entry of ampliseq's dada_ref_databases) rather than replacing it:
+    # Nextflow deep-merges a -params-file map into the config's, and the
+    # launcher's merge with the form's params is top-level only.
+    params: dict = {}
+    for r in rows:
+        if r["action"] != "precache":
+            continue
+        *parents, leaf = r["param"].split("/")
+        node = params
+        for key in parents:
+            node = node.setdefault(key, {})
+        node[leaf] = precache_value(r["value"])
     return json.dumps(params, indent=2) + "\n"
 
 
@@ -207,8 +239,10 @@ def main() -> int:
     for r in rows:
         # Precache paths are read on the compute node at run time; a typo here
         # would only surface mid-pipeline, so flag it now.
-        if r["action"] in ("precache", "hint") and r["value"] not in JSON_LITERALS and not Path(r["value"]).exists():
-            sys.stderr.write(f"gen_network_config: warning: line {r['lineno']}: {r['value']} does not exist\n")
+        if r["action"] in ("precache", "hint"):
+            for path in precache_paths(r["value"]):
+                if not Path(path).exists():
+                    sys.stderr.write(f"gen_network_config: warning: line {r['lineno']}: {path} does not exist\n")
 
     pipeline_dir = output_dir / "pipeline"
     if pipeline_dir.exists():

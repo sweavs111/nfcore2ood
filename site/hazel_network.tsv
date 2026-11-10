@@ -98,6 +98,8 @@ mag	-	precache	checkm_download_url	null	CheckM1 data URL; schema has exists: tru
 mag	-	precache	gtdbtk_single_job	true	Classify all bins in one GTDB-Tk job (10 CPUs) instead of one per bin: each job loads the full r232 reference data, needing 128 GB (mag asks 140, Hazel caps it) and a scarce >128 GB node
 mag	CHECKM2_DATABASEDOWNLOAD	precache	checkm2_db	/gpfs_backup/bioinfo_data/databases/checkm2_db/v3/uniref100.KO.1.dmnd	CheckM2 1.1.0 (DB v3 needs >= 1.1.0); run_checkm2 is off by default
 viralrecon	-	precache	kraken2_db	/gpfs_backup/bioinfo_data/databases/kraken2_human/grch38p14_chm13v2	Human-only Kraken2 2.1.6 DB (GRCh38.p14 + T2T-CHM13v2.0) for host removal; default is an s3 URL the launcher fetches. Must be host-only: viralrecon assembles the reads Kraken2 leaves unclassified, so PlusPFP would drop viral reads
+sarek	-	precache	vep_cache	/gpfs_backup/bioinfo_data/databases/vep_cache/r116	Ensembl VEP r116 caches (homo_sapiens GRCh38 only; matches GATK.GRCh38 vep_cache_version 116); default is s3://annotation-cache, staged by the launcher
+sarek	-	precache	snpeff_cache	/gpfs_backup/bioinfo_data/databases/snpeff_cache/20251125	snpEff 5.0 data for every snpeff_db sarek 3.10.0 genome configs use (GRCh38.99, GRCh37.87, GRCm38.99, ...); default is s3://annotation-cache
 
 # --- process: tool flags for offline compute nodes ----------------------
 # BUSCO posts anonymous usage stats after every run, even with --offline; on
@@ -108,6 +110,8 @@ mag	BUSCO_BUSCO	process	-	ext.args = { (params.busco_db ? '--offline ' : '') + '
 
 # --- note: form help for remote inputs users must replace themselves -----
 viralrecon	-	note	genome	Offline runs: this genome's files are GitHub URLs, so also set local fasta, gff, primer_bed and nextclade_dataset.	genomes.config (nf-core/configs) points every viralrecon genome asset at GitHub
+
+sarek	-	note	genome	Offline runs: iGenomes files are on s3 and can't be fetched; set igenomes_ignore and give local reference files.	no local iGenomes mirror yet (GATK.GRCh38 is 63 GB); see the igenomes_base todo
 
 # --- hide: download switches whose process is denied above ---------------
 sarek	-	hide	download_cache	-	downloads VEP and snpEff caches (ENSEMBLVEP_DOWNLOAD/SNPEFF_DOWNLOAD denied), overriding vep_cache/snpeff_cache

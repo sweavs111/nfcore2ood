@@ -238,13 +238,13 @@ def infer_widget_type(property_schema: dict[str, Any]) -> str | None:
 class FieldOverride:
     """Site adjustment to one generated form field, from the network table."""
 
-    action: str  # hide | hint | precache
+    action: str  # hide | hint | note | precache
     value: str
     note: str
 
 
 def load_field_overrides(table_path: Path, pipeline: str) -> dict[str, FieldOverride]:
-    """Map param name -> override for the hide/hint/precache rows of ``pipeline``.
+    """Map param name -> override for the hide/hint/note/precache rows of ``pipeline``.
 
     precache rows don't change what the pipeline runs here (the site config
     sets the param); they blank the form's pre-filled schema default, which
@@ -259,7 +259,7 @@ def load_field_overrides(table_path: Path, pipeline: str) -> dict[str, FieldOver
         slug = slug[len("nf-core-"):]
     overrides = {}
     for row in parse_table(table_path):
-        if row["action"] in ("hide", "hint", "precache") and row["pipeline"] in ("*", slug):
+        if row["action"] in ("hide", "hint", "note", "precache") and row["pipeline"] in ("*", slug):
             overrides[row["param"]] = FieldOverride(row["action"], row["value"], row["note"])
     return overrides
 
@@ -318,6 +318,8 @@ def normalize_field(
                 )
     elif override is not None and override.action == "hint":
         help_text = append_help(help_text, f"A local copy is available: `{override.value}`.")
+    elif override is not None and override.action == "note":
+        help_text = append_help(help_text, override.value)
 
     return FieldSpec(
         original_name=property_name,

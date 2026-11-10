@@ -44,10 +44,10 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-ACTIONS = ("route", "deny", "precache", "todo", "hide", "hint", "process")
+ACTIONS = ("route", "deny", "precache", "todo", "hide", "hint", "note", "process")
 # Rows that only change the generated OOD forms (read by json2ood.py), not
 # any Nextflow config.
-FORM_ACTIONS = ("hide", "hint")
+FORM_ACTIONS = ("hide", "hint", "note")
 
 # Catch-all for download-looking process names the table doesn't list yet.
 # Across the 7 pipelines staged when this was written (461 process names) it
@@ -83,7 +83,7 @@ def parse_table(table_path: Path) -> list[dict[str, str]]:
             raise ValueError(f"{table_path}:{lineno}: unknown action {row['action']!r}")
         if row["action"] in ("route", "deny") and (row["pipeline"] != "*" or row["process"] == "-"):
             raise ValueError(f"{table_path}:{lineno}: {row['action']} rows need pipeline * and a process name")
-        if row["action"] in ("precache", "hint") and (row["pipeline"] == "*" or row["param"] == "-" or row["value"] == "-"):
+        if row["action"] in ("precache", "hint", "note") and (row["pipeline"] == "*" or row["param"] == "-" or row["value"] == "-"):
             raise ValueError(f"{table_path}:{lineno}: {row['action']} rows need a pipeline, param and value")
         if row["action"] == "process" and (row["pipeline"] == "*" or row["process"] == "-" or row["value"] == "-"):
             raise ValueError(f"{table_path}:{lineno}: process rows need a pipeline, process name and directive")

@@ -184,7 +184,8 @@ unset, which the launcher sets for every non-test run.
 `NF2OOD_NETWORK_TABLE` (optional) points json2ood.py at the same table; it
 reads only the form rows for the pipeline being generated
 (`load_field_overrides`): `hide` drops a field (download switches whose
-process is denied), `hint` appends a local path to a field's help, and
+process is denied), `hint` appends a local path to a field's help, `note`
+appends free text to a field's help, and
 `precache` blanks the field's pre-filled default and says blank uses the
 local copy.
 

@@ -47,9 +47,11 @@
 #             hint     add "a local copy is available: <value>" to <param>'s
 #                      help text in the generated OOD forms, without setting
 #                      it. Also json2ood.py only; see the precache rule below.
+#             note     add <value> (free text) to <param>'s help text in the
+#                      generated OOD forms. json2ood.py only.
 #   param     pipeline param (precache: the one to set; deny/todo: the one a
 #             user should set instead), or -.
-#   value     precache/hint: the local path; - otherwise. precache also
+#   value     precache/hint: the local path; note: the help text; - otherwise. precache also
 #             takes null, to clear a remote URL default that nf-schema
 #             validation checks for existence (it can't offline) when the
 #             pipeline only uses it in an off-by-default mode; and true/false,
@@ -103,6 +105,9 @@ viralrecon	-	precache	kraken2_db	/gpfs_backup/bioinfo_data/databases/kraken2_hum
 # mag's own ext.args is params.busco_db ? '--offline' : '' (kept here, as a
 # closure so it sees the site busco_db too).
 mag	BUSCO_BUSCO	process	-	ext.args = { (params.busco_db ? '--offline ' : '') + '--opt-out-run-stats' }	BUSCO usage-stats upload times out offline (~2 min per task)
+
+# --- note: form help for remote inputs users must replace themselves -----
+viralrecon	-	note	genome	Offline runs: this genome's files are GitHub URLs, so also set local fasta, gff, primer_bed and nextclade_dataset.	genomes.config (nf-core/configs) points every viralrecon genome asset at GitHub
 
 # --- hide: download switches whose process is denied above ---------------
 sarek	-	hide	download_cache	-	downloads VEP and snpEff caches (ENSEMBLVEP_DOWNLOAD/SNPEFF_DOWNLOAD denied), overriding vep_cache/snpeff_cache

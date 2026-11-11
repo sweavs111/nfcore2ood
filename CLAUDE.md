@@ -35,6 +35,12 @@ source ./nf2ood.env
 # leaves other apps alone; -f/--force is ignored when filtering)
 ./nf2ood --output /path/to/generated-apps --pipeline rnaseq --version 3.18.0
 
+# Full redeploy into a shared directory: only dirs nf2ood generated
+# (.nf2ood-app marker) are replaced; the output dir itself is never
+# removed, so e.g. backend/ beside the apps is safe. --force also deletes
+# marked apps whose pipeline version is gone (otherwise just listed).
+./nf2ood --output /path/to/generated-apps
+
 # Dry run (no files written)
 ./nf2ood --output /path/to/generated-apps --dry-run
 

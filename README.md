@@ -297,7 +297,13 @@ Optional flags:
   `nf-core-rnaseq` or just `rnaseq`). Repeatable.
 - `-v, --version VER`: only process versions matching `VER` (e.g. `3.18.0`).
   Repeatable.
-- `-f, --force`: delete the existing output directory before regeneration.
+- `-f, --force`: after a full (unfiltered) run, also delete apps nf2ood
+  generated earlier whose pipeline version is gone (without it they are only
+  listed). nf2ood never removes the output directory itself, and only ever
+  deletes or replaces directories it generated (marked with `.nf2ood-app`,
+  or older apps with a `role: batch_connect` manifest), so other things
+  sharing the output directory -- on Hazel, `backend/` and the cache-reset
+  app in `/usr/local/usrapps/nfcore` -- are never touched.
   Ignored when `--pipeline` or `--version` is given so unrelated apps in the
   output directory are preserved.
 - `-n, --dry-run`: print what would be generated without writing any files.

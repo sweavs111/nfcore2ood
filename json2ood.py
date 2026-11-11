@@ -525,10 +525,20 @@ def render_form(groups: list[GroupSpec], base_form_content: str) -> str:
     return "\n".join(lines)
 
 
+def is_numeric_enum(field_spec: FieldSpec) -> bool:
+    values = field_spec.enum_values
+    return field_spec.widget_type == "select" and bool(values) and all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) for v in values
+    )
+
+
 def render_params_entry(field_spec: FieldSpec) -> str:
     if field_spec.widget_type == "check_box":
         value_expression = f"to_bool.call(context.{field_spec.normalized_name})"
-    elif field_spec.widget_type == "number_field":
+    elif field_spec.widget_type == "number_field" or is_numeric_enum(field_spec):
+        # A select's options always submit strings, so one listing numbers
+        # (e.g. atacseq's read_length: 50, 75, ...) needs the same coercion,
+        # or schema validation rejects "50" as not an integer.
         value_expression = f"to_number.call(context.{field_spec.normalized_name})"
     elif field_spec.widget_type == "mixed_text_field":
         value_expression = f"to_number_or_bool.call(context.{field_spec.normalized_name})"

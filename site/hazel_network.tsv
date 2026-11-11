@@ -123,6 +123,8 @@ ampliseq	-	note	dada_ref_taxonomy	Offline runs: only the default (sbdi-gtdb=R11-
 
 rnaseq	-	note	genome	Offline runs: iGenomes files are on s3 and can't be fetched; leave genome blank and give local fasta and gtf (or gff).	no local iGenomes mirror yet; rnaseq has no default genome, so only runs that pick one are affected
 
+atacseq	-	note	genome	Offline runs: iGenomes files are on s3 and can't be fetched; leave genome blank and give local fasta and gtf, plus macs_gsize or read_length.	no local iGenomes mirror yet; atacseq has no default genome. Without --genome, MACS2 needs macs_gsize (or read_length, to compute it with khmer)
+
 # --- hint: local databases for opt-in steps (see precache vs hint above) -
 rnaseq	-	hint	kraken_db	/gpfs_backup/bioinfo_data/databases/kraken2_pluspfp_16gb/20261022	Kraken2 PlusPFP capped at 16 GB (fits standard nodes; full PlusPFP is kraken2_pluspfp). Only used with --contaminant_screening kraken2/kraken2_bracken, which has no default DB
 
